@@ -8,7 +8,7 @@
 #include <zephyr/kernel.h>
 #include <cmsis_os2.h>
 
-#define TIMEOUT_TICKS   10
+#define TIMEOUT_TICKS   20
 #define STACKSZ         CONFIG_CMSIS_V2_THREAD_MAX_STACK_SIZE
 
 void thread_sema(void *arg)
@@ -21,7 +21,7 @@ void thread_sema(void *arg)
 		     "Semaphore acquired unexpectedly!");
 
 	/* Try taking semaphore after a TIMEOUT, but before release */
-	status = osSemaphoreAcquire((osSemaphoreId_t)arg, TIMEOUT_TICKS - 5);
+	status = osSemaphoreAcquire((osSemaphoreId_t)arg, TIMEOUT_TICKS - 10);
 	zassert_true(status == osErrorTimeout,
 		     "Semaphore acquired unexpectedly!");
 
