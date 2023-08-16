@@ -25,6 +25,9 @@ LOG_MODULE_REGISTER(usbd_ch9, CONFIG_USBD_LOG_LEVEL);
 #define CTRL_AWAIT_SETUP_DATA		0
 #define CTRL_AWAIT_STATUS_STAGE		1
 
+static int nonstd_request(struct usbd_contex *const uds_ctx,
+			  struct net_buf *const dbuf);
+
 static bool reqtype_is_to_host(const struct usb_setup_packet *const setup)
 {
 	return setup->wLength && USB_REQTYPE_GET_DIR(setup->bmRequestType);
@@ -457,6 +460,16 @@ static int sreq_get_descriptor(struct usbd_contex *const uds_ctx,
 
 	LOG_DBG("Get Descriptor request type %u index %u",
 		desc_type, desc_idx);
+
+	if (setup->RequestType.recipient != USB_REQTYPE_RECIPIENT_DEVICE) {
+		/*
+		 * If the recipient is not the device then it is probably a
+		 * class specific  request where wIndex is the interface
+		 * number or endpoing and not the language ID. e.g. HID
+		 * Class Get Descriptor request.
+		 */
+		return nonstd_request(uds_ctx, buf);
+	}
 
 	switch (desc_type) {
 	case USB_DESC_DEVICE:
