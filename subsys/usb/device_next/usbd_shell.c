@@ -95,7 +95,7 @@ static int cmd_usbd_magic(const struct shell *sh,
 	err = usbd_add_descriptor(my_uds_ctx, &lang);
 	err |= usbd_add_descriptor(my_uds_ctx, &mfr);
 	err |= usbd_add_descriptor(my_uds_ctx, &product);
-	err |= usbd_add_descriptor(my_uds_ctx, &sn);
+	// err |= usbd_add_descriptor(my_uds_ctx, &sn);
 
 	if (err) {
 		shell_error(sh, "dev: Failed to initialize descriptors, %d", err);
@@ -135,7 +135,7 @@ static int cmd_usbd_defaults(const struct shell *sh,
 	err = usbd_add_descriptor(my_uds_ctx, &lang);
 	err |= usbd_add_descriptor(my_uds_ctx, &mfr);
 	err |= usbd_add_descriptor(my_uds_ctx, &product);
-	err |= usbd_add_descriptor(my_uds_ctx, &sn);
+	// err |= usbd_add_descriptor(my_uds_ctx, &sn);
 
 	if (err) {
 		shell_error(sh, "dev: Failed to initialize descriptors, %d", err);
