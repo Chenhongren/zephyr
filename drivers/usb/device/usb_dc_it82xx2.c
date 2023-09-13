@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-#define DT_DRV_COMPAT ite_it82xx2_usb
+#define DT_DRV_COMPAT ite_it82xx2_usb_old
 
 #include <zephyr/kernel.h>
 #include <zephyr/usb/usb_device.h>
