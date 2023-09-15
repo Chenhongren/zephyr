@@ -26,13 +26,6 @@
 extern "C" {
 #endif
 
-/**
- * @brief New USB device stack core API
- * @defgroup usbd_api USB device core API
- * @ingroup usb
- * @{
- */
-
 /*
  * The USB Unicode bString is encoded in UTF16LE, which means it takes up
  * twice the amount of bytes than the same string encoded in ASCII7.
@@ -278,15 +271,22 @@ struct usbd_class_node {
 	struct usbd_class_data *data;
 };
 
+/**
+ * @brief New USB device stack core API
+ * @defgroup usbd_api USB device core API
+ * @ingroup usb
+ * @{
+ */
+
 #define USBD_DEVICE_DEFINE(device_name, uhc_dev, vid, pid)		\
 	static struct usb_device_descriptor				\
 	desc_##device_name = {						\
 		.bLength = sizeof(struct usb_device_descriptor),	\
 		.bDescriptorType = USB_DESC_DEVICE,			\
 		.bcdUSB = sys_cpu_to_le16(USB_SRN_2_0),			\
-		.bDeviceClass = USB_BCC_MISCELLANEOUS,			\
-		.bDeviceSubClass = 2,					\
-		.bDeviceProtocol = 1,					\
+		.bDeviceClass = 0x0,			\
+		.bDeviceSubClass = 0x0,					\
+		.bDeviceProtocol = 0x0,					\
 		.bMaxPacketSize0 = USB_CONTROL_EP_MPS,			\
 		.idVendor = vid,					\
 		.idProduct = pid,					\

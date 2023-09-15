@@ -17,7 +17,7 @@
 const struct shell *ctx_shell;
 
 USBD_CONFIGURATION_DEFINE(config_baz, USB_SCD_REMOTE_WAKEUP, 200);
-USBD_CONFIGURATION_DEFINE(config_foo, USB_SCD_SELF_POWERED, 200);
+USBD_CONFIGURATION_DEFINE(config_foo, USB_SCD_SELF_POWERED, 50);
 
 USBD_DESC_LANG_DEFINE(lang);
 USBD_DESC_MANUFACTURER_DEFINE(mfr, "ZEPHYR");
@@ -25,7 +25,7 @@ USBD_DESC_PRODUCT_DEFINE(product, "Zephyr USBD foobaz");
 USBD_DESC_SERIAL_NUMBER_DEFINE(sn, "0123456789ABCDEF");
 
 USBD_DEVICE_DEFINE(sh_uds_ctx, DEVICE_DT_GET(DT_NODELABEL(zephyr_udc0)),
-		   0x2fe3, 0xffff);
+		   0x2fe3, 0x0007);
 
 static struct usbd_contex *my_uds_ctx = &sh_uds_ctx;
 
@@ -55,8 +55,8 @@ static int cmd_register(const struct shell *sh,
 
 	if (ret) {
 		shell_error(sh,
-			    "dev: failed to add USB class %s to configuration %u",
-			    argv[1], cfg);
+			    "dev: failed to add USB class %s to configuration %u, ret %d",
+			    argv[1], cfg, ret);
 	} else {
 		shell_print(sh,
 			    "dev: added USB class %s to configuration %u",
@@ -95,12 +95,16 @@ static int cmd_usbd_magic(const struct shell *sh,
 	err = usbd_add_descriptor(my_uds_ctx, &lang);
 	err |= usbd_add_descriptor(my_uds_ctx, &mfr);
 	err |= usbd_add_descriptor(my_uds_ctx, &product);
-	// err |= usbd_add_descriptor(my_uds_ctx, &sn);
+	err |= usbd_add_descriptor(my_uds_ctx, &sn);
 
 	if (err) {
 		shell_error(sh, "dev: Failed to initialize descriptors, %d", err);
 	}
 
+	// err = usbd_add_configuration(my_uds_ctx, &config_baz);
+	// if (err) {
+	// 	shell_error(sh, "dev: Failed to add configuration");
+	// }
 	err = usbd_add_configuration(my_uds_ctx, &config_foo);
 	if (err) {
 		shell_error(sh, "dev: Failed to add configuration");

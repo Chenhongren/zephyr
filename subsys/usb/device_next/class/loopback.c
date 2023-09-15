@@ -8,7 +8,8 @@
 #include <zephyr/drivers/usb/udc.h>
 
 #include <zephyr/logging/log.h>
-LOG_MODULE_REGISTER(usb_loopback, CONFIG_USBD_LOOPBACK_LOG_LEVEL);
+// LOG_MODULE_REGISTER(usb_loopback, CONFIG_USBD_LOOPBACK_LOG_LEVEL);
+LOG_MODULE_REGISTER(usb_loopback, LOG_LEVEL_DBG);
 
 /*
  * NOTE: this class is experimental and is in development.
@@ -26,22 +27,29 @@ static uint8_t lb_buf[1024];
 static const struct usbd_cctx_vendor_req lb_vregs =
 	USBD_VENDOR_REQ(LB_VENDOR_REQ_OUT, LB_VENDOR_REQ_IN);
 
+struct usb_hid_class_subdescriptor {
+	uint8_t bDescriptorType;
+	uint16_t wDescriptorLength;
+} __packed;
+
+struct usb_hid_descriptor {
+	uint8_t bLength;
+	uint8_t bDescriptorType;
+	uint16_t bcdHID;
+	uint8_t bCountryCode;
+	uint8_t bNumDescriptors;
+
+	/*
+	 * Specification says at least one Class Descriptor needs to
+	 * be present (Report Descriptor).
+	 */
+	struct usb_hid_class_subdescriptor subdesc[1];
+} __packed;
+
 struct loopback_desc {
 	struct usb_if_descriptor if0;
-	struct usb_ep_descriptor if0_out_ep;
+	struct usb_hid_descriptor if0_hid;
 	struct usb_ep_descriptor if0_in_ep;
-	struct usb_ep_descriptor if0_int_out_ep;
-	struct usb_ep_descriptor if0_int_in_ep;
-	struct usb_ep_descriptor if0_iso_out_ep;
-	struct usb_ep_descriptor if0_iso_in_ep;
-	struct usb_if_descriptor if1;
-	struct usb_if_descriptor if2;
-	struct usb_ep_descriptor if2_out_ep;
-	struct usb_ep_descriptor if2_in_ep;
-	struct usb_if_descriptor if3;
-	struct usb_ep_descriptor if3_out_ep;
-	struct usb_ep_descriptor if3_in_ep;
-	struct usb_desc_header nil_desc;
 } __packed;
 
 #define DEFINE_LOOPBACK_DESCRIPTOR(x, _)			\
@@ -52,156 +60,31 @@ static struct loopback_desc lb_desc_##x = {			\
 		.bDescriptorType = USB_DESC_INTERFACE,		\
 		.bInterfaceNumber = 0,				\
 		.bAlternateSetting = 0,				\
-		.bNumEndpoints = 6,				\
-		.bInterfaceClass = USB_BCC_VENDOR,		\
+		.bNumEndpoints = 1,				\
+		.bInterfaceClass = USB_BCC_HID,		\
 		.bInterfaceSubClass = 0,			\
 		.bInterfaceProtocol = 0,			\
 		.iInterface = 0,				\
 	},							\
-								\
-	/* Data Endpoint OUT */					\
-	.if0_out_ep = {						\
-		.bLength = sizeof(struct usb_ep_descriptor),	\
-		.bDescriptorType = USB_DESC_ENDPOINT,		\
-		.bEndpointAddress = 0x01,			\
-		.bmAttributes = USB_EP_TYPE_BULK,		\
-		.wMaxPacketSize = 0,				\
-		.bInterval = 0x00,				\
-	},							\
-								\
+	.if0_hid = {					\
+		.bLength = sizeof(struct usb_hid_descriptor),		\
+		.bDescriptorType = 0x21,			\
+		.bcdHID = sys_cpu_to_le16(0x0111),		\
+		.bCountryCode = 0,					\
+		.bNumDescriptors = 1,					\
+		.subdesc[0] = {						\
+			.bDescriptorType = 0x22,	\
+			.wDescriptorLength = 0x34,				\
+		},							\
+	},					\
 	/* Data Endpoint IN */					\
 	.if0_in_ep = {						\
-		.bLength = sizeof(struct usb_ep_descriptor),	\
-		.bDescriptorType = USB_DESC_ENDPOINT,		\
-		.bEndpointAddress = 0x81,			\
-		.bmAttributes = USB_EP_TYPE_BULK,		\
-		.wMaxPacketSize = 0,				\
-		.bInterval = 0x00,				\
-	},							\
-								\
-	/* Interface Endpoint OUT */				\
-	.if0_int_out_ep = {					\
-		.bLength = sizeof(struct usb_ep_descriptor),	\
-		.bDescriptorType = USB_DESC_ENDPOINT,		\
-		.bEndpointAddress = 0x03,			\
-		.bmAttributes = USB_EP_TYPE_INTERRUPT,		\
-		.wMaxPacketSize = 0,				\
-		.bInterval = 0x01,				\
-	},							\
-								\
-	/* Interrupt Endpoint IN */				\
-	.if0_int_in_ep = {					\
-		.bLength = sizeof(struct usb_ep_descriptor),	\
-		.bDescriptorType = USB_DESC_ENDPOINT,		\
-		.bEndpointAddress = 0x83,			\
-		.bmAttributes = USB_EP_TYPE_INTERRUPT,		\
-		.wMaxPacketSize = 0,				\
-		.bInterval = 0x01,				\
-	},							\
-								\
-	/* Endpoint ISO OUT */					\
-	.if0_iso_out_ep = {					\
-		.bLength = sizeof(struct usb_ep_descriptor),	\
-		.bDescriptorType = USB_DESC_ENDPOINT,		\
-		.bEndpointAddress = 0x03,			\
-		.bmAttributes = USB_EP_TYPE_ISO,		\
-		.wMaxPacketSize = 0,				\
-		.bInterval = 0x01,				\
-	},							\
-								\
-	/* Endpoint ISO IN */					\
-	.if0_iso_in_ep = {					\
-		.bLength = sizeof(struct usb_ep_descriptor),	\
-		.bDescriptorType = USB_DESC_ENDPOINT,		\
-		.bEndpointAddress = 0x83,			\
-		.bmAttributes = USB_EP_TYPE_ISO,		\
-		.wMaxPacketSize = 0,				\
-		.bInterval = 0x01,				\
-	},							\
-								\
-	/* Interface descriptor 1, no endpoints */		\
-	.if1 = {						\
-		.bLength = sizeof(struct usb_if_descriptor),	\
-		.bDescriptorType = USB_DESC_INTERFACE,		\
-		.bInterfaceNumber = 1,				\
-		.bAlternateSetting = 0,				\
-		.bNumEndpoints = 0,				\
-		.bInterfaceClass = USB_BCC_VENDOR,		\
-		.bInterfaceSubClass = 0,			\
-		.bInterfaceProtocol = 0,			\
-		.iInterface = 0,				\
-	},							\
-								\
-	/* Interface descriptor 1 */				\
-	.if2 = {						\
-		.bLength = sizeof(struct usb_if_descriptor),	\
-		.bDescriptorType = USB_DESC_INTERFACE,		\
-		.bInterfaceNumber = 1,				\
-		.bAlternateSetting = 1,				\
-		.bNumEndpoints = 2,				\
-		.bInterfaceClass = USB_BCC_VENDOR,		\
-		.bInterfaceSubClass = 0,			\
-		.bInterfaceProtocol = 0,			\
-		.iInterface = 0,				\
-	},							\
-								\
-	/* Data Endpoint OUT */					\
-	.if2_out_ep = {						\
-		.bLength = sizeof(struct usb_ep_descriptor),	\
-		.bDescriptorType = USB_DESC_ENDPOINT,		\
-		.bEndpointAddress = 0x02,			\
-		.bmAttributes = USB_EP_TYPE_BULK,		\
-		.wMaxPacketSize = 32,				\
-		.bInterval = 0x00,				\
-	},							\
-								\
-	/* Data Endpoint IN */					\
-	.if2_in_ep = {						\
-		.bLength = sizeof(struct usb_ep_descriptor),	\
-		.bDescriptorType = USB_DESC_ENDPOINT,		\
-		.bEndpointAddress = 0x82,			\
-		.bmAttributes = USB_EP_TYPE_BULK,		\
-		.wMaxPacketSize = 32,				\
-		.bInterval = 0x00,				\
-	},							\
-								\
-	/* Interface descriptor 1 */				\
-	.if3 = {						\
-		.bLength = sizeof(struct usb_if_descriptor),	\
-		.bDescriptorType = USB_DESC_INTERFACE,		\
-		.bInterfaceNumber = 1,				\
-		.bAlternateSetting = 2,				\
-		.bNumEndpoints = 2,				\
-		.bInterfaceClass = USB_BCC_VENDOR,		\
-		.bInterfaceSubClass = 0,			\
-		.bInterfaceProtocol = 0,			\
-		.iInterface = 0,				\
-	},							\
-								\
-	/* Data Endpoint OUT, get wMaxPacketSize from UDC */	\
-	.if3_out_ep = {						\
-		.bLength = sizeof(struct usb_ep_descriptor),	\
-		.bDescriptorType = USB_DESC_ENDPOINT,		\
-		.bEndpointAddress = 0x02,			\
-		.bmAttributes = USB_EP_TYPE_BULK,		\
-		.wMaxPacketSize = 0,				\
-		.bInterval = 0x00,				\
-	},							\
-								\
-	/* Data Endpoint IN, get wMaxPacketSize from UDC */	\
-	.if3_in_ep = {						\
-		.bLength = sizeof(struct usb_ep_descriptor),	\
-		.bDescriptorType = USB_DESC_ENDPOINT,		\
-		.bEndpointAddress = 0x82,			\
-		.bmAttributes = USB_EP_TYPE_BULK,		\
-		.wMaxPacketSize = 0,				\
-		.bInterval = 0x00,				\
-	},							\
-								\
-	/* Termination descriptor */				\
-	.nil_desc = {						\
-		.bLength = 0,					\
-		.bDescriptorType = 0,				\
+		.bLength = sizeof(struct usb_ep_descriptor),		\
+		.bDescriptorType = USB_DESC_ENDPOINT,			\
+		.bEndpointAddress = 0x81,				\
+		.bmAttributes = USB_EP_TYPE_INTERRUPT,					\
+		.wMaxPacketSize = sys_cpu_to_le16(16),			\
+		.bInterval = 9,		\
 	},							\
 };								\
 

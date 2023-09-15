@@ -978,8 +978,8 @@
 			reg = <0x00f02f00 256>;
 			status = "disabled";
 			num-bidir-endpoints = <1>;
-			num-in-endpoints = <10>;
-			num-out-endpoints = <5>;
+			num-in-endpoints = <11>;
+			num-out-endpoints = <6>;
 		};
 	};
 };
