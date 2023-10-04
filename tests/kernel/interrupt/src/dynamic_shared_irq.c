@@ -15,6 +15,7 @@ struct shared_irq_fixture {
 };
 
 static struct shared_irq_fixture fixture;
+uint32_t lastest_enabled_irq;
 
 static void reset_test_vector(void)
 {
@@ -46,6 +47,7 @@ static void dummy_isr(const void *data)
 	ARG_UNUSED(data);
 
 	test_vector[0] = TEST_DUMMY_ISR_VAL;
+	irq_disable(lastest_enabled_irq);
 }
 
 static unsigned int get_irq_slot(unsigned int start)
@@ -61,6 +63,7 @@ static unsigned int get_irq_slot(unsigned int start)
 			/* check to see if we can trigger this IRQ */
 			arch_irq_connect_dynamic(i, IRQ_PRIORITY, dummy_isr,
 						 NULL, 0);
+			lastest_enabled_irq = i;
 			irq_enable(i);
 			trigger_irq(i);
 
@@ -153,7 +156,11 @@ ZTEST(shared_irq_feature, test_dynamic_shared_irq_write)
 {
 	int i;
 
+	lastest_enabled_irq = fixture.irq1;
 	irq_enable(fixture.irq1);
+	/* wait 5ms before enabling next interrupt */
+	k_busy_wait(5000);
+	lastest_enabled_irq = fixture.irq2;
 	irq_enable(fixture.irq2);
 
 	trigger_irq(fixture.irq1);
@@ -198,6 +205,7 @@ ZTEST(shared_irq_feature, test_dynamic_shared_irq_disconnect_write)
 	zassert_true(!z_shared_sw_isr_table[fixture.irq1_table_idx].client_num,
 		     "wrong client number at irq1");
 
+	lastest_enabled_irq = fixture.irq1;
 	irq_enable(fixture.irq1);
 	trigger_irq(fixture.irq1);
 

@@ -16,11 +16,14 @@
 #define TEST_DUMMY_ISR_VAL 0xdeadbeef
 #define TEST_INVALID_IRQ 0xcafebabe
 
+extern uint32_t lastest_enabled_irq;
+
 #define ISR_DEFINE(name)				\
 static inline void name(const void *data)		\
 {							\
 	int idx = POINTER_TO_INT(data);			\
 	test_vector[idx] = result_vector[idx];		\
+	irq_disable(lastest_enabled_irq);		\
 }							\
 
 static uint32_t test_vector[TEST_VECTOR_SIZE] = {
