@@ -8,7 +8,7 @@
 #include <zephyr/drivers/usb/udc.h>
 
 #include <zephyr/logging/log.h>
-LOG_MODULE_REGISTER(usb_loopback, CONFIG_USBD_LOOPBACK_LOG_LEVEL);
+LOG_MODULE_REGISTER(usb_loopback, LOG_LEVEL_DBG);
 
 /*
  * NOTE: this class is experimental and is in development.

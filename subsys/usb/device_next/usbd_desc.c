@@ -243,10 +243,10 @@ int usbd_add_descriptor(struct usbd_contex *const uds_ctx,
 			dev_desc->iProduct = desc_nd->idx;
 			break;
 		case USBD_DUT_STRING_SERIAL_NUMBER:
-			if (!desc_nd->custom_sn) {
-				ret = usbd_get_sn_from_hwid(desc_nd);
-				desc_nd->utf16le = false;
-			}
+			// if (!desc_nd->custom_sn) {
+			// 	ret = usbd_get_sn_from_hwid(desc_nd);
+			// 	desc_nd->utf16le = false;
+			// }
 
 			dev_desc->iSerialNumber = desc_nd->idx;
 			break;

@@ -17,7 +17,8 @@
 #include <zephyr/drivers/usb/udc.h>
 
 #include <zephyr/logging/log.h>
-LOG_MODULE_REGISTER(usbd_cdc_acm, CONFIG_USBD_CDC_ACM_LOG_LEVEL);
+//LOG_MODULE_REGISTER(usbd_cdc_acm, CONFIG_USBD_CDC_ACM_LOG_LEVEL);
+LOG_MODULE_REGISTER(usbd_cdc_acm, LOG_LEVEL_ERR);
 
 /*
  * FIXME: buffer count per device.
@@ -181,7 +182,7 @@ static int usbd_cdc_acm_request(struct usbd_class_node *const c_nd,
 		/* RX transfer completion */
 		size_t done;
 
-		LOG_HEXDUMP_INF(buf->data, buf->len, "");
+		LOG_HEXDUMP_DBG(buf->data, buf->len, "");
 		done = ring_buf_put(data->rx_fifo.rb, buf->data, buf->len);
 		if (done && data->cb) {
 			cdc_acm_work_submit(&data->irq_cb_work);
