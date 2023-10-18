@@ -99,9 +99,6 @@ struct it82xx2_ep_event {
 	enum it82xx2_event_type event;
 };
 
-K_MSGQ_DEFINE(evt_msgq, sizeof(struct it82xx2_ep_event),
-	      8, sizeof(uint32_t));
-
 struct usb_it8xxx2_wuc {
 	/* WUC control device structure */
 	const struct device *wucs;
@@ -109,19 +106,21 @@ struct usb_it8xxx2_wuc {
 	uint8_t mask;
 };
 
-struct it82xx2_priv_data {
-	const struct device *dev;
+K_MEM_SLAB_DEFINE(udc_it82xx2_slab, sizeof(struct it82xx2_ep_event),
+		  1024, sizeof(void *));
 
+struct it82xx2_priv_data {
 	struct k_fifo fifo;
+	struct k_work work;
 	struct k_work_delayable suspended_work;
 
-	struct k_thread thread_data;
 	struct k_sem suspended_sem;
 
 	/* FIFO_1/2/3 ready status */
 	bool fifo_ready[3];
 
 	bool suspended;
+	const struct device *dev;
 };
 
 struct usb_it82xx2_config {
@@ -132,7 +131,6 @@ struct usb_it82xx2_config {
 	uint8_t wu_irq;
 	struct udc_ep_config *ep_cfg_in;
 	struct udc_ep_config *ep_cfg_out;
-	void (*make_thread)(const struct device *dev);
 };
 
 enum it82xx2_ep_ctrl {
@@ -418,12 +416,23 @@ static void it82xx2_event_submit(const struct device *dev,
 				 const uint8_t ep,
 				 const enum it82xx2_event_type event)
 {
-	struct it82xx2_ep_event evt;
+	struct it82xx2_priv_data *priv = udc_get_private(dev);
+	struct it82xx2_ep_event *evt;
+	int ret;
 
-	evt.dev = dev;
-	evt.ep = ep;
-	evt.event = event;
-	k_msgq_put(&evt_msgq, &evt, K_NO_WAIT);
+	ret = k_mem_slab_alloc(&udc_it82xx2_slab, (void **)&evt, K_NO_WAIT);
+	if (ret) {
+		LOG_ERR("Failed to allocate slab");
+		udc_submit_event(dev, UDC_EVT_ERROR, ret);
+		return;
+	}
+
+	evt->dev = dev;
+	evt->ep = ep;
+	evt->event = event;
+
+	k_fifo_put(&priv->fifo, evt);
+	k_work_submit_to_queue(udc_get_work_q(), &priv->work);
 }
 
 static int it82xx2_ep_enqueue(const struct device *dev,
@@ -809,14 +818,44 @@ static inline int work_handler_setup(const struct device *dev, uint8_t ep)
 	return err;
 }
 
+static bool test = false;
+static bool it82xx2_fake_token(const struct device *dev, uint8_t ep, uint8_t token_type);
 static inline int work_handler_in(const struct device *dev, uint8_t ep)
 {
+	struct udc_ep_config *ep_cfg;
 	struct net_buf *buf;
 	int err = 0;
 
+	if (it82xx2_fake_token(dev, ep, DC_IN_TRANS)) {
+		return 0;
+	}
+
+	buf = udc_buf_peek(dev, ep);
+	if (buf == NULL) {
+		LOG_ERR("%s ITE Debug %d ep 0x%x Error", __func__, __LINE__, ep);
+		return -ENODATA;
+	}
+	ep_cfg = udc_get_ep_cfg(dev, ep);
+
+	net_buf_pull(buf, MIN(buf->len, ep_cfg->mps));
+
+	it82xx2_usb_set_ep_ctrl(dev, ep, EP_DATA_SEQ_INV, true);
+
+	if (buf->len) {
+		work_handler_xfer_continue(dev, ep, buf);
+		return 0;
+	}
+
 	buf = udc_buf_get(dev, ep);
 	if (buf == NULL) {
+		LOG_ERR("%s ITE Debug %d ep 0x%x Error", __func__, __LINE__, ep);
 		return -ENODATA;
+	}
+	if (udc_ep_buf_has_zlp(buf)) {
+		LOG_ERR("[%s] ITE Debug [%d] - without verify", __func__, __LINE__);
+		work_handler_xfer_continue(dev, ep, buf);
+		udc_ep_buf_clear_zlp(buf);
+		return 0;
 	}
 
 	udc_ep_set_busy(dev, ep, false);
@@ -828,6 +867,9 @@ static inline int work_handler_in(const struct device *dev, uint8_t ep)
 			udc_ctrl_submit_status(dev, buf);
 		}
 
+		if (test == true) {
+			LOG_ERR("%s ITE Debug %d ep 0x%x finish status in", __func__, __LINE__, ep);
+		}
 		/* Update to next stage of control transfer */
 		udc_ctrl_update_stage(dev, buf);
 
@@ -856,6 +898,7 @@ static int work_handler_out(const struct device *dev, uint8_t ep)
 
 	buf = udc_buf_get(dev, ep);
 	if (buf == NULL) {
+		LOG_ERR("%s ITE Debug %d ep 0x%x Error", __func__, __LINE__, ep);
 		return -ENODATA;
 	}
 
@@ -883,36 +926,40 @@ static int work_handler_out(const struct device *dev, uint8_t ep)
 	return err;
 }
 
-static void xfer_work_handler(const struct device *dev)
+static void xfer_work_handler(struct k_work *item)
 {
-	while (true) {
-		struct it82xx2_ep_event evt;
-		int err = 0;
+	struct it82xx2_priv_data *priv;
+	struct it82xx2_ep_event *evt;
+	int err = 0;
 
-		k_msgq_get(&evt_msgq, &evt, K_FOREVER);
+	priv = CONTAINER_OF(item, struct it82xx2_priv_data, work);
+	while ((evt = k_fifo_get(&priv->fifo, K_NO_WAIT)) != NULL) {
+		struct udc_ep_config *ep_cfg;
 
-		switch(evt.event) {
+		switch(evt->event) {
 		case IT82xx2_EVT_SETUP_TOKEN:
-			err = work_handler_setup(evt.dev, evt.ep);
+			err = work_handler_setup(evt->dev, evt->ep);
 			break;
 		case IT82xx2_EVT_IN_TOKEN:
-			err = work_handler_in(evt.dev, evt.ep);
+			err = work_handler_in(evt->dev, evt->ep);
 			break;
 		case IT82xx2_EVT_OUT_TOKEN:
-			err = work_handler_out(evt.dev, evt.ep);
+			err = work_handler_out(evt->dev, evt->ep);
 			break;
 		case IT82xx2_EVT_XFER:
-			err = work_handler_xfer_next(evt.dev, evt.ep);
+			err = work_handler_xfer_next(evt->dev, evt->ep);
 			break;
 		default:
-			LOG_ERR("Unknown event type 0x%x", evt.event);
+			LOG_ERR("Unknown event type 0x%x", evt->event);
 			err = -1;
 			break;
 		}
 
 		if (err) {
-			udc_submit_event(evt.dev, UDC_EVT_ERROR, err);
+			udc_submit_event(evt->dev, UDC_EVT_ERROR, err);
 		}
+
+		k_mem_slab_free(&udc_it82xx2_slab, (void *)evt);
 	}
 }
 
@@ -980,6 +1027,10 @@ static void it82xx2_usb_xfer_done(const struct device *dev)
 						LOG_DBG("Cleared stall bit and rx fifo");
 						break;
 					}
+
+					if (test == true) {
+						LOG_ERR("%s ITE Debug %d ep 0x%x SETUP token", __func__, __LINE__, ep);
+					}
 					it82xx2_usb_set_ep_ctrl(dev, ep, EP_DATA_SEQ_1, true);
 					it82xx2_event_submit(dev, ep, IT82xx2_EVT_SETUP_TOKEN);
 				}
@@ -1001,35 +1052,42 @@ static void it82xx2_usb_xfer_done(const struct device *dev)
 						ep = USB_EP_DIR_IN | ep_idx;
 					}
 				}
+				it82xx2_event_submit(dev, ep, IT82xx2_EVT_IN_TOKEN);
 
-				if (it82xx2_fake_token(dev, ep, DC_IN_TRANS)) {
-					break;
-				}
+				// if (it82xx2_fake_token(dev, ep, DC_IN_TRANS)) {
+				// 	break;
+				// }
 
-				buf = udc_buf_peek(dev, ep);
-				if (buf == NULL) {
-					udc_submit_event(dev, UDC_EVT_ERROR, -ENOBUFS);
-					break;
-				}
+				// buf = udc_buf_peek(dev, ep);
+				// if (buf == NULL) {
+				// 	LOG_ERR("%s ITE Debug %d ep 0x%x ERROR", __func__, __LINE__, ep);
+				// 	udc_submit_event(dev, UDC_EVT_ERROR, -ENOBUFS);
+				// 	break;
+				// }
+				// if (ep_idx == EP3) test = true;
+				// if (test == true) {
+				// 	LOG_ERR("%s ITE Debug %d ep 0x%x IN token", __func__, __LINE__, ep);
+				// }
 
-				ep_cfg = udc_get_ep_cfg(dev, ep);
+				// ep_cfg = udc_get_ep_cfg(dev, ep);
 
-				net_buf_pull(buf, MIN(buf->len, ep_cfg->mps));
+				// net_buf_pull(buf, MIN(buf->len, ep_cfg->mps));
 
-				it82xx2_usb_set_ep_ctrl(dev, ep, EP_DATA_SEQ_INV, true);
+				// it82xx2_usb_set_ep_ctrl(dev, ep, EP_DATA_SEQ_INV, true);
 
-				if (buf->len) {
-					work_handler_xfer_continue(dev, ep, buf);
-				} else {
-					if (udc_ep_buf_has_zlp(buf)) {
-						LOG_ERR("[%s] ITE Debug [%d] - without verify", __func__, __LINE__);
-						work_handler_xfer_continue(dev, ep, buf);
-						udc_ep_buf_clear_zlp(buf);
-						break;
-					}
+				// if (buf->len) {
+				// 	work_handler_xfer_continue(dev, ep, buf);
+				// } else {
+				// 	if (udc_ep_buf_has_zlp(buf)) {
+				// 		LOG_ERR("[%s] ITE Debug [%d] - without verify", __func__, __LINE__);
+				// 		work_handler_xfer_continue(dev, ep, buf);
+				// 		udc_ep_buf_clear_zlp(buf);
+				// 		break;
+				// 	}
 
-					it82xx2_event_submit(dev, ep, IT82xx2_EVT_IN_TOKEN);
-				}
+				// 	it82xx2_event_submit(dev, ep, IT82xx2_EVT_IN_TOKEN);
+				// 	// work_handler_in(dev, ep);
+				// }
 				break;
 			case DC_OUTDATA_TRANS:
 				/* OUT transaction done */
@@ -1052,10 +1110,14 @@ static void it82xx2_usb_xfer_done(const struct device *dev)
 
 				buf = udc_buf_peek(dev, ep);
 				if (buf == NULL) {
+					LOG_ERR("%s ITE Debug %d ep 0x%x Error", __func__, __LINE__, ep);
 					udc_submit_event(dev, UDC_EVT_ERROR, -ENOBUFS);
 					break;
 				}
 
+				if (test == true) {
+					LOG_ERR("%s ITE Debug %d ep 0x%x OUT token", __func__, __LINE__, ep);
+				}
 				len = (uint16_t)ff_regs[ep_fifo].ep_rx_fifo_dcnt_lsb + (((uint16_t)ff_regs[ep_fifo].ep_rx_fifo_dcnt_msb) << 8);
 				ep_cfg = udc_get_ep_cfg(dev, ep);
 				if (net_buf_tailroom(buf) >= ep_cfg->mps && len == ep_cfg->mps) {
@@ -1106,6 +1168,9 @@ static void it82xx2_usb_dc_isr(const void *arg)
 	if (status & DC_TRANS_DONE) {
 		/* clear interrupt before new transaction */
 		usb_regs->dc_interrupt_status = DC_TRANS_DONE;
+		if (test == true) {
+			LOG_ERR("%s ITE Debug %d isr trigger", __func__, __LINE__);
+		}
 		it82xx2_usb_xfer_done(dev);
 		return;
 	}
@@ -1269,6 +1334,7 @@ static int it82xx2_usb_driver_preinit(const struct device *dev)
 
 	k_mutex_init(&data->mutex);
 	k_fifo_init(&priv->fifo);
+	k_work_init(&priv->work, xfer_work_handler);
 
 	err = pinctrl_apply_state(config->pcfg, PINCTRL_STATE_DEFAULT);
 	if (err < 0) {
@@ -1326,34 +1392,10 @@ static int it82xx2_usb_driver_preinit(const struct device *dev)
 
 	priv->dev = dev;
 
-	config->make_thread(dev);
-
 	return 0;
 }
 
 #define IT82xx2_USB_DEVICE_DEFINE(n)						\
-	K_KERNEL_STACK_DEFINE(udc_it82xx2_stack_##n, 1024);	\
-										\
-	static void udc_it82xx2_thread_##n(void *dev, void *arg1, void *arg2)	\
-	{									\
-		ARG_UNUSED(arg1);	\
-		ARG_UNUSED(arg2);	\
-		xfer_work_handler(dev);					\
-	}									\
-										\
-	static void udc_it82xx2_make_thread_##n(const struct device *dev)	\
-	{									\
-		struct it82xx2_priv_data *priv = udc_get_private(dev);		\
-										\
-		k_thread_create(&priv->thread_data,				\
-				udc_it82xx2_stack_##n,				\
-				K_THREAD_STACK_SIZEOF(udc_it82xx2_stack_##n),	\
-				udc_it82xx2_thread_##n,			\
-				(void *)dev, NULL, NULL,			\
-				K_PRIO_COOP(8),\
-				0, K_NO_WAIT);					\
-		k_thread_name_set(&priv->thread_data, dev->name);		\
-	}									\
 										\
 	PINCTRL_DT_INST_DEFINE(n);	\
 	static struct usb_it8xxx2_wuc usb_wuc_##n[IT8XXX2_DT_INST_WUCCTRL_LEN(n)] =	\
@@ -1370,7 +1412,6 @@ static int it82xx2_usb_driver_preinit(const struct device *dev)
 		.wu_irq = DT_INST_IRQ_BY_IDX(n, 1, irq),	\
 		.ep_cfg_in = ep_cfg_out,					\
 		.ep_cfg_out = ep_cfg_in,					\
-		.make_thread = udc_it82xx2_make_thread_##n,			\
 	};									\
 										\
 	static struct it82xx2_priv_data priv_data_##n = {				\
