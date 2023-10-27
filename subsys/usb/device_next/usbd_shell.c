@@ -101,6 +101,12 @@ static int cmd_usbd_magic(const struct shell *sh,
 		shell_error(sh, "dev: Failed to initialize descriptors, %d", err);
 	}
 
+#if 0
+	err = usbd_add_configuration(my_uds_ctx, &config_baz);
+	if (err) {
+		shell_error(sh, "dev: Failed to add configuration");
+	}
+#endif
 	err = usbd_add_configuration(my_uds_ctx, &config_foo);
 	if (err) {
 		shell_error(sh, "dev: Failed to add configuration");

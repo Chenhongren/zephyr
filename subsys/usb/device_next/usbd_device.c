@@ -153,11 +153,20 @@ int usbd_wakeup_request(struct usbd_contex *const uds_ctx)
 		goto wakeup_request_error;
 	}
 
+#if 0
 	if (!uds_ctx->status.rwup || !usbd_is_suspended(uds_ctx)) {
 		LOG_ERR("Remote wakeup feature not enabled or not suspended");
 		ret = -EACCES;
 		goto wakeup_request_error;
 	}
+#else
+	if (!uds_ctx->status.rwup) {
+		LOG_ERR("%s ITE Debug %d", __func__, __LINE__);
+	}
+	if (!usbd_is_suspended(uds_ctx)) {
+		LOG_ERR("%s ITE Debug %d", __func__, __LINE__);
+	}
+#endif
 
 	ret = udc_host_wakeup(uds_ctx->dev);
 
