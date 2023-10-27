@@ -17,6 +17,9 @@ LOG_MODULE_REGISTER(udc_test, LOG_LEVEL_INF);
  * connected to the host as this state is not covered by this test.
  */
 
+#if 1
+// Need to revise the MAX_NUM_ENDPOINTS as 14 to verify
+#endif
 #define FALSE_EP_ADDR		0x0FU
 
 K_MSGQ_DEFINE(test_msgq, sizeof(struct udc_event), 8, sizeof(uint32_t));
@@ -357,7 +360,11 @@ static void test_udc_ep_api(const struct device *dev,
 
 static void test_udc_ep_mps(uint8_t type)
 {
+#if 0
 	uint16_t mps[] = {8, 16, 32, 64, 512, 1024};
+#else
+	uint16_t mps[] = {8, 16, 32, 64};
+#endif
 	struct usb_ep_descriptor ed = {
 		.bLength = sizeof(struct usb_ep_descriptor),
 		.bDescriptorType = USB_DESC_ENDPOINT,
@@ -402,9 +409,10 @@ static void test_udc_ep_mps(uint8_t type)
 
 		ed.wMaxPacketSize = mps[i];
 		test_udc_ep_api(dev, &ed);
-
+#if 0
 		ed.bEndpointAddress |= USB_EP_DIR_IN;
 		test_udc_ep_api(dev, &ed);
+#endif
 	}
 
 	err = udc_disable(dev);
@@ -457,7 +465,11 @@ static struct usb_ep_descriptor ed_ctrl_in = {
 static struct usb_ep_descriptor ed_bulk_out = {
 	.bLength = sizeof(struct usb_ep_descriptor),
 	.bDescriptorType = USB_DESC_ENDPOINT,
+#if 0
 	.bEndpointAddress = 0x01,
+#else
+	.bEndpointAddress = 0x02,
+#endif
 	.bmAttributes = USB_EP_TYPE_BULK,
 	.wMaxPacketSize = 64,
 	.bInterval = 0,

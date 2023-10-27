@@ -482,6 +482,11 @@ static void cdc_acm_tx_fifo_handler(struct k_work *work)
 	len = ring_buf_get(data->tx_fifo.rb, buf->data, buf->size);
 	net_buf_add(buf, len);
 
+	/* For zlp test */
+	if (!(buf->len % 64)) {
+		udc_ep_buf_set_zlp(buf);
+	}
+
 	ret = usbd_ep_enqueue(c_nd, buf);
 	if (ret) {
 		LOG_ERR("Failed to enqueue");
