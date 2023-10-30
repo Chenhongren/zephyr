@@ -185,4 +185,11 @@ config HWINFO_ANDES
 	help
 	  Enable Andes hwinfo driver
 
+config HWINFO_IT8XXX2
+	bool "IT8XXX2 chip ID"
+	default y
+	depends on SOC_SERIES_RISCV32_IT8XXX2
+	help
+	  Enable ITE IT8XXX2 hwinfo driver
+
 endif
