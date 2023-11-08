@@ -38,8 +38,12 @@
  * EC clock frequency (PWM and tachometer driver need it to reply
  * to api or calculate RPM)
  */
+#ifdef CONFIG_SOC_IT8XXX2_EC_BUS_24MHZ
+#define EC_FREQ			MHZ(24)
+#else
 #define EC_FREQ			MHZ(8)
 
+#endif
 
 /* --- General Control (GCTRL) --- */
 #define IT8XXX2_GCTRL_BASE      0x00F02000
