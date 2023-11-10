@@ -5,10 +5,13 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+#include <sample_usbd.h>
+
 #include <zephyr/kernel.h>
 #include <zephyr/init.h>
 
 #include <zephyr/usb/usb_device.h>
+#include <zephyr/usb/usbd.h>
 #include <zephyr/usb/class/usb_hid.h>
 
 #define LOG_LEVEL LOG_LEVEL_INF
@@ -114,7 +117,7 @@ static const struct hid_ops ops = {
 	.protocol_change = protocol_cb,
 };
 
-static void status_cb(enum usb_dc_status_code status, const uint8_t *param)
+static inline void status_cb(enum usb_dc_status_code status, const uint8_t *param)
 {
 	switch (status) {
 	case USB_DC_RESET:
@@ -134,11 +137,39 @@ static void status_cb(enum usb_dc_status_code status, const uint8_t *param)
 	}
 }
 
+#if defined(CONFIG_USB_DEVICE_STACK_NEXT)
+static struct usbd_contex *sample_usbd;
+
+static int enable_usb_device_next(void)
+{
+	int err;
+
+	sample_usbd = sample_usbd_init_device();
+	if (sample_usbd == NULL) {
+		LOG_ERR("Failed to initialize USB device");
+		return -ENODEV;
+	}
+
+	err = usbd_enable(sample_usbd);
+	if (err) {
+		LOG_ERR("Failed to enable device support");
+		return err;
+	}
+
+	LOG_DBG("USB device support enabled");
+
+	return 0;
+}
+#endif /* IS_ENABLED(CONFIG_USB_DEVICE_STACK_NEXT) */
 int main(void)
 {
 	int ret;
 
+#if defined(CONFIG_USB_DEVICE_STACK_NEXT)
+	hdev = DEVICE_DT_GET_ONE(zephyr_hid_device);
+#else
 	hdev = device_get_binding("HID_0");
+#endif
 	if (hdev == NULL) {
 		LOG_ERR("Cannot get USB HID Device");
 		return -ENODEV;
@@ -163,13 +194,23 @@ int main(void)
 
 	LOG_INF("Starting application");
 
+#if defined(CONFIG_USB_DEVICE_STACK_NEXT)
+	ret = enable_usb_device_next();
+#else
 	ret = usb_enable(status_cb);
+#endif
 	if (ret != 0) {
 		LOG_ERR("Failed to enable USB");
 		return ret;
 	}
 
 	k_work_init(&report_send, send_report);
+
+#if defined(CONFIG_USB_DEVICE_STACK_NEXT)
+	/* FIXME: We need to mock this to USB device notifications. */
+	k_msleep(1000);
+	status_cb(USB_DC_CONFIGURED, NULL);
+#endif
 
 	return 0;
 }
