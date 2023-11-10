@@ -158,12 +158,14 @@ ZTEST(shared_irq_feature, test_dynamic_shared_irq_write)
 
 	lastest_enabled_irq = fixture.irq1;
 	irq_enable(fixture.irq1);
+
+	trigger_irq(fixture.irq1);
+
 	/* wait 5ms before enabling next interrupt */
 	k_busy_wait(5000);
 	lastest_enabled_irq = fixture.irq2;
 	irq_enable(fixture.irq2);
 
-	trigger_irq(fixture.irq1);
 	trigger_irq(fixture.irq2);
 
 	/* wait 5ms before checking the results */
