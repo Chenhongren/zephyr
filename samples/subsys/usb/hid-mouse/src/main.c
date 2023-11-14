@@ -93,6 +93,23 @@ static void input_cb(struct input_event *evt)
 
 INPUT_CALLBACK_DEFINE(NULL, input_cb);
 
+K_KERNEL_STACK_DEFINE(test_stack, 1024);
+struct k_thread test_thread_data;
+static void test_thread(void *arg0, void *arg1, void *arg2)
+{
+	ARG_UNUSED(arg0);
+	ARG_UNUSED(arg1);
+	ARG_UNUSED(arg2);
+	while (1) {
+		printk("%s ITE Debug %d\n", __func__, __LINE__);
+		// int ret = gpio_pin_toggle(led0.port, led0.pin);
+		// if (ret < 0) {
+		// 	printk("Failed to toggle the LED pin, error: %d", ret);
+		// }
+		k_msleep(1000);
+	}
+}
+
 int main(void)
 {
 	const struct device *hid_dev;
@@ -127,6 +144,11 @@ int main(void)
 		return 0;
 	}
 
+	k_thread_create(&test_thread_data, test_stack,
+					K_THREAD_STACK_SIZEOF(test_stack),
+					test_thread, NULL, NULL, NULL, K_PRIO_COOP(8),
+					0, K_NO_WAIT);
+	k_thread_name_set(&test_thread_data, "test_thread");
 	while (true) {
 		k_sem_take(&report_sem, K_FOREVER);
 
@@ -143,5 +165,6 @@ int main(void)
 			LOG_ERR("Failed to toggle the LED pin, error: %d", ret);
 		}
 	}
+
 	return 0;
 }
