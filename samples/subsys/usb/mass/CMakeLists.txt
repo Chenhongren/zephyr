@@ -10,8 +10,16 @@ if((NOT CONFIG_DISK_DRIVER_FLASH) AND
 	message( FATAL_ERROR "No disk access settings detected." )
 endif()
 
+set(SAMPLE_USBD_DIR ${ZEPHYR_BASE}/samples/subsys/usb/common)
 FILE(GLOB app_sources src/*.c)
+
+target_include_directories(app PRIVATE ${SAMPLE_USBD_DIR})
+
 target_sources(app PRIVATE ${app_sources})
+
+target_sources_ifdef(CONFIG_USB_DEVICE_STACK_NEXT app PRIVATE
+	${SAMPLE_USBD_DIR}/sample_usbd_init.c
+)
 
 if(CONFIG_BUILD_WITH_TFM)
   target_include_directories(app PRIVATE
