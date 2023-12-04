@@ -1,0 +1,9 @@
+# Copyright (c) 2023 Nordic Semiconductor ASA
+# SPDX-License-Identifier: Apache-2.0
+
+# Source common USB sample options used to initialize new experimental USB
+# device stack. You do not need to source this Kconfig file in your custom
+# application.
+source "samples/subsys/usb/common/Kconfig.sample_usbd"
+
+source "Kconfig.zephyr"
