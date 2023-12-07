@@ -8,6 +8,7 @@
 #include <zephyr/dt-bindings/gpio/gpio.h>
 #include <ite/it82xx2.dtsi>
 #include <ite/it8xxx2-pinctrl-map.dtsi>
+#include <zephyr/dt-bindings/input/input-event-codes.h>
 
 / {
 	model = "IT82XX2 EV-Board";
@@ -36,8 +37,40 @@
 	leds {
 		compatible = "gpio-leds";
 		led0: led_0 {
-			gpios = <&gpioc 0 GPIO_ACTIVE_HIGH>;
+			gpios = <&gpioh 0 GPIO_ACTIVE_HIGH>;
 			label = "Green LED";
+		};
+	};
+
+	hid_dev_0: hid_dev_0 {
+		compatible = "zephyr,hid-device";
+		interface-name = "HID0";
+		boot-protocol-code = "none";
+		polling-rate = <1>;
+		in-reports-mps = <64>;
+	};
+
+	gpio_keys {
+		compatible = "gpio-keys";
+		button1: button_1 {
+			gpios = <&gpioe 0 GPIO_PULL_UP>;
+			label = "Push button switch 1";
+			zephyr,code = <INPUT_KEY_0>;
+		};
+		button2: button_2 {
+			gpios = <&gpioe 1 GPIO_PULL_UP>;
+			label = "Push button switch 2";
+			zephyr,code = <INPUT_KEY_1>;
+		};
+		button3: button_3 {
+			gpios = <&gpioe 2 GPIO_PULL_UP>;
+			label = "Push button switch 3";
+			zephyr,code = <INPUT_KEY_2>;
+		};
+		button4: button_4 {
+			gpios = <&gpioe 3 GPIO_PULL_UP>;
+			label = "Push button switch 4";
+			zephyr,code = <INPUT_KEY_3>;
 		};
 	};
 };
