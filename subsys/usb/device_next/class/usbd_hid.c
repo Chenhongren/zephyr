@@ -238,6 +238,7 @@ static int handle_get_report(const struct device *dev,
 	case HID_REPORT_TYPE_FEATURE:
 		LOG_DBG("Get Report, Feature Report ID %u", id);
 		errno = ops->get_report(dev, type, id, net_buf_tailroom(buf), buf->data);
+		buf->len = net_buf_tailroom(buf);
 		break;
 	default:
 		errno = -ENOTSUP;
@@ -445,8 +446,28 @@ static void usbd_hid_resumed(struct usbd_class_node *const c_nd)
 	LOG_DBG("Configuration resumed");
 }
 
+static void usbd_hid_reset(struct usbd_class_node *const c_nd)
+{
+	const struct device *dev = c_nd->data->priv;
+	struct hid_device_data *ddata = dev->data;
+	const struct hid_device_ops *const ops = ddata->ops;
+
+	uint16_t protocol = HID_PROTOCOL_REPORT;
+
+	if (ddata->protocol != protocol) {
+		ddata->protocol = protocol;
+
+		if (ops->set_protocol) {
+			ops->set_protocol(dev, protocol);
+		}
+	}
+
+	LOG_DBG("Configuration reset");
+}
+
 static int usbd_hid_init(struct usbd_class_node *const c_nd)
 {
+	usbd_hid_reset(c_nd);
 	LOG_DBG("HID class %s init", c_nd->name);
 
 	return 0;
@@ -604,6 +625,7 @@ struct usbd_class_api usbd_hid_api = {
 	.disable = usbd_hid_disable,
 	.suspended = usbd_hid_suspended,
 	.resumed = usbd_hid_resumed,
+	.reset = usbd_hid_reset,
 	.control_to_dev = usbd_hid_ctd,
 	.control_to_host = usbd_hid_cth,
 	.init = usbd_hid_init,

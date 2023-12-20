@@ -190,6 +190,23 @@ static inline void usbd_class_resumed(struct usbd_class_node *const node)
 }
 
 /**
+ * @brief USB reset handler
+ *
+ * @param[in] dev Pointer to device struct of the class instance
+ * @param[in] event Power management event
+ *
+ * @return 0 on success, other values on fail.
+ */
+static inline void usbd_class_reset(struct usbd_class_node *const node)
+{
+	const struct usbd_class_api *api = node->api;
+
+	if (api->reset != NULL) {
+		api->reset(node);
+	}
+}
+
+/**
  * @brief Class associated configuration active handler
  *
  * @note The execution of the handler must not block.
