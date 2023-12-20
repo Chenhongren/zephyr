@@ -84,6 +84,9 @@ static void usbd_class_bcast_event(struct usbd_contex *const uds_ctx,
 		case UDC_EVT_RESUME:
 			usbd_class_resumed(c_nd);
 			break;
+		case UDC_EVT_RESET:
+			usbd_class_reset(c_nd);
+			break;
 		default:
 			break;
 		}
@@ -148,6 +151,7 @@ static ALWAYS_INLINE int usbd_event_handler(struct usbd_contex *const uds_ctx,
 		break;
 	case UDC_EVT_RESET:
 		LOG_WRN("RESET event");
+		usbd_class_bcast_event(uds_ctx, event);
 		ret = event_handler_bus_reset(uds_ctx);
 		break;
 	case UDC_EVT_EP_REQUEST:
