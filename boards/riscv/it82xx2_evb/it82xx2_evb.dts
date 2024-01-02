@@ -47,7 +47,7 @@
 		interface-name = "HID0";
 		boot-protocol-code = "none";
 		polling-rate = <1>;
-		in-reports-mps = <64>;
+		in-report-size = <64>;
 	};
 
 	gpio_keys {

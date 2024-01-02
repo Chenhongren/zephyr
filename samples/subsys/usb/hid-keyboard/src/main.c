@@ -62,29 +62,33 @@ static void input_cb(struct input_event *evt)
 	case INPUT_KEY_0:
 		tmp[KB_KEY_CODE1] = 0;
 		if (evt->value) {
-			tmp[KB_KEY_CODE1] = HID_KEY_NUMLOCK;
+			// tmp[KB_KEY_CODE1] = HID_KEY_NUMLOCK;
+			tmp[KB_KEY_CODE1] = HID_KEY_UP;
 		}
 
 		break;
 	case INPUT_KEY_1:
 		tmp[KB_KEY_CODE1] = 0;
 		if (evt->value) {
-			tmp[KB_KEY_CODE1] = HID_KEY_CAPSLOCK;
+			// tmp[KB_KEY_CODE1] = HID_KEY_CAPSLOCK;
+			tmp[KB_KEY_CODE1] = HID_KEY_B;
 		}
 
 		break;
 	case INPUT_KEY_2:
 		tmp[KB_KEY_CODE1] = 0;
 		if (evt->value) {
-			tmp[KB_KEY_CODE1] = HID_KEY_SCROLLLOCK;
+			// tmp[KB_KEY_CODE1] = HID_KEY_SCROLLLOCK;
+			tmp[KB_KEY_CODE1] = HID_KEY_C;
 		}
 
 		break;
 	case INPUT_KEY_3:
 		tmp[KB_KEY_CODE1] = 0;
 		if (evt->value) {
-			tmp[KB_KEY_CODE1] = HID_KEY_ENTER;
-			prankme = !prankme;
+			// tmp[KB_KEY_CODE1] = HID_KEY_ENTER;
+			tmp[KB_KEY_CODE1] = HID_KEY_D;
+			// prankme = !prankme;
 		}
 
 		break;
@@ -108,13 +112,16 @@ static void do_prankme(void)
 
 	switch (cnt & 3) {
 	case 0:
-		report[KB_KEY_CODE1] = HID_KEY_NUMLOCK;
+		// report[KB_KEY_CODE1] = HID_KEY_NUMLOCK;
+		report[KB_KEY_CODE1] = HID_KEY_UP;
 		break;
 	case 1:
-		report[KB_KEY_CODE1] = HID_KEY_CAPSLOCK;
+		// report[KB_KEY_CODE1] = HID_KEY_CAPSLOCK;
+		report[KB_KEY_CODE1] = HID_KEY_B;
 		break;
 	case 2:
-		report[KB_KEY_CODE1] = HID_KEY_SCROLLLOCK;
+		// report[KB_KEY_CODE1] = HID_KEY_SCROLLLOCK;
+		report[KB_KEY_CODE1] = HID_KEY_C;
 		break;
 	case 3:
 		report[KB_KEY_CODE1] = 0;
