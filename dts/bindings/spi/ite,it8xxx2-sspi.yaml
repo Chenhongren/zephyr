@@ -3,9 +3,9 @@
 
 description: IT8XXX2 SPI
 
-compatible: "ite,it8xxx2-sspi"
+compatible: "ite,it8xxx2-spi"
 
-include: spi-controller.yaml
+include: [spi-controller.yaml, pinctrl-device.yaml]
 
 properties:
   reg:
@@ -13,3 +13,16 @@ properties:
 
   interrupts:
     required: true
+
+  pinctrl-names:
+    required: true
+
+  pinctrl-0:
+    type: phandles
+    required: true
+
+  quad-mode:
+    type: boolean
+    required: false
+    description: |
+      Enable quad mode

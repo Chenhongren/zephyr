@@ -215,3 +215,30 @@
 		};
 	};
 };
+
+&spi0 {
+	status = "okay";
+	pinctrl-0 = <&spi_ssce0_default
+		     &spi_ssce1_default
+		     &spi_ssck_default
+		     &spi_smosi_default
+		     &spi_smiso_default>;
+	pinctrl-names = "default";
+
+	mx25r16: mx25v1635f@0 {
+		compatible = "jedec,spi-nor";
+		reg = <0>;
+		spi-max-frequency = <1500000>;
+		jedec-id = [c2 23 15];
+		size = <0x1000000>; // 16Mb
+	};
+
+	mx25u64: mx25u6435f@1 {
+		compatible = "jedec,spi-nor";
+		reg = <1>;
+		spi-max-frequency = <1500000>;
+		jedec-id = [c2 25 37];
+		size = <0x4000000>; // 64Mb
+	};
+
+};

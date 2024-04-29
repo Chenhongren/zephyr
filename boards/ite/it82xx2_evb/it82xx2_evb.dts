@@ -20,6 +20,7 @@
 		kscan0 = &kscan_input;
 		watchdog0 = &twd0;
 		pwm-0 = &pwm0;
+		spi-0 = &spi0;
 	};
 
 	chosen {
@@ -228,4 +229,17 @@ zephyr_udc0: &usb0 {
 			reg = <0x00040000 DT_SIZE_K(256)>;
 		};
 	};
+};
+
+&spi0 {
+	status = "okay";
+	quad-mode;
+	pinctrl-0 = <&spi_ssce0_default
+		     &spi_ssce1_default
+		     &spi_ssck_default
+		     &spi_smosi_default
+		     &spi_smiso_default>;
+	pinctrl-1 = <&spi_sio2_default
+		     &spi_sio3_default>;
+	pinctrl-names = "default", "quad_mode";
 };

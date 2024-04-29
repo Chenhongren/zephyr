@@ -116,6 +116,10 @@ static int cmd_spi_conf(const struct shell *ctx, size_t argc, char **argv)
 		case 'T':
 			operation |= SPI_FRAME_FORMAT_TI;
 			break;
+		case 's':
+			//operation |= SPI_FRAME_FORMAT_TI;
+			config.slave = 1;
+			break;
 		default:
 			all_opts_is_valid = false;
 			shell_error(ctx, "invalid setting %c", *opts);
@@ -130,6 +134,10 @@ static int cmd_spi_conf(const struct shell *ctx, size_t argc, char **argv)
 out:
 	config.frequency = frequency;
 	config.operation = operation;
+#if 0
+	config.slave = 1;
+	//config.operation |= SPI_LINES_DUAL;
+#endif
 	spi_device = dev;
 
 	return 0;
