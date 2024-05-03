@@ -50,19 +50,19 @@ void read_jedec_id()
 
 int main(void)
 {
-	uint32_t sspi_clk = KHZ(24000);
-	spi_cfg.frequency = sspi_clk / 16;
-	LOG_ERR("frequency= %d", spi_cfg.frequency);
+	// uint32_t sspi_clk = KHZ(24000);
+	// spi_cfg.frequency = sspi_clk / 16;
+	// LOG_ERR("frequency= %d", spi_cfg.frequency);
 
-	LOG_ERR("Chip select 0");
-	spi_cfg.slave = 0;
-	read_jedec_id();
-	k_sleep(K_MSEC(3000));
+	// LOG_ERR("Chip select 0");
+	// spi_cfg.slave = 0;
+	// read_jedec_id();
+	// k_sleep(K_MSEC(3000));
 
-	LOG_ERR("Chip select 1");
-	spi_cfg.slave = 1;
-	read_jedec_id();
-	k_sleep(K_MSEC(3000));
+	// LOG_ERR("Chip select 1");
+	// spi_cfg.slave = 1;
+	// read_jedec_id();
+	// k_sleep(K_MSEC(3000));
 
 	return 0;
 }

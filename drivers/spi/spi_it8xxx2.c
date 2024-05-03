@@ -293,86 +293,144 @@ static void spi_it8xxx2_xfer(const struct device *dev)
 	struct spi_context *ctx = &data->ctx;
 	uint8_t reg_val;
 
-	if (!spi_context_tx_buf_on(ctx) && !spi_context_rx_buf_on(ctx)) {
-		spi_context_complete(ctx, dev, 0);
+	if ((ctx->tx_len == 0) && (ctx->rx_len == 0)) {
+		spi_context_complete(&data->ctx, dev, 0);
 		return;
 	}
 
-	data->spi_cmdq_header_addr = (uint32_t)(&data->cmdq_data);
-	ite_intc_isr_clear(cfg->spi_irq);
-	irq_enable(cfg->spi_irq);
-	reg_val = sys_read8(cfg->base + SPI01_CTRL1);
-	reg_val |= INTERRUPT_EN;
-	sys_write8(reg_val, cfg->base + SPI01_CTRL1);
+	LOG_ERR("Before tx_len %d, rx_len %d", ctx->tx_len, ctx->rx_len);
 
-	data->cmdq_data.command.fields.cmd_end = 1;
-	data->cmdq_data.check_bit_mask = 0;
-	data->cmdq_data.check_bit_value = 0;
-	memcpy(data->cmdq_data.write_data, ctx->tx_buf, ctx->tx_len);
+	if (ctx->tx_len == 0) {
+		// rx only, nothing to tx
 
-	LOG_HEXDUMP_DBG(ctx->tx_buf, ctx->tx_len, "tx:");
+	} else if (ctx->rx_len == 0) {
+		// tx only, nothing to rx
+		LOG_HEXDUMP_ERR(ctx->tx_buf, ctx->tx_len, "TX Only: ");
 
-	if (spi_context_total_rx_len(ctx) == 0) {
-		// TODO: TX only
-		printk("ITE Debug TX only\n");
+		for (size_t i = 0; i < ctx->tx_len; i++) {
+			ite_intc_isr_clear(cfg->spi_irq);
+			irq_enable(cfg->spi_irq);
+			reg_val = sys_read8(cfg->base + SPI01_CTRL1);
+			reg_val |= INTERRUPT_EN;
+			sys_write8(reg_val, cfg->base + SPI01_CTRL1);
+
+			sys_write8(ctx->tx_buf[i], cfg->base + SPI00_SPIDATA);
+
+			reg_val = sys_read8(cfg->base + SPI02_CTRL2);
+			reg_val &= ~READ_CYCLE;
+			reg_val &= ~BLOCK_SELECT;
+			sys_write8(reg_val, cfg->base + SPI02_CTRL2);
+
+			if (ctx->config->slave == 0) {
+				sys_write8(CH0_START, cfg->base + SPI03_STS);
+			} else {
+				sys_write8(CH1_START, cfg->base + SPI03_STS);
+			}
+			k_sem_take(&data->spi_sem, K_FOREVER);
+		};
+
+		spi_context_update_tx(ctx, 1, ctx->tx_len);
+
+		if (ctx->tx_len != 0) {
+			LOG_HEXDUMP_ERR(ctx->tx_buf, ctx->tx_len, "Next TX Only: ");
+			for (size_t i = 0; i < ctx->tx_len; i++) {
+				ite_intc_isr_clear(cfg->spi_irq);
+				irq_enable(cfg->spi_irq);
+				reg_val = sys_read8(cfg->base + SPI01_CTRL1);
+				reg_val |= INTERRUPT_EN;
+				sys_write8(reg_val, cfg->base + SPI01_CTRL1);
+
+				sys_write8(ctx->tx_buf[i], cfg->base + SPI00_SPIDATA);
+
+				reg_val = sys_read8(cfg->base + SPI02_CTRL2);
+				reg_val &= ~READ_CYCLE;
+				reg_val &= ~BLOCK_SELECT;
+				sys_write8(reg_val, cfg->base + SPI02_CTRL2);
+
+				if (ctx->config->slave == 0) {
+					sys_write8(CH0_START, cfg->base + SPI03_STS);
+				} else {
+					sys_write8(CH1_START, cfg->base + SPI03_STS);
+				}
+				k_sem_take(&data->spi_sem, K_FOREVER);
+
+			}
+			spi_context_update_tx(ctx, 1, ctx->tx_len);
+		}
+
+		sys_write8(SPI_TRANS_END, cfg->base + SPI03_STS);
+		reg_val = sys_read8(cfg->base + SPI03_STS);
+		if ((reg_val & SPI_TRANS_END_FLAG) == SPI_TRANS_END_FLAG) {
+			sys_write8(SPI_TRANS_END_FLAG, cfg->base + SPI03_STS);
+		} else {
+			LOG_ERR("ITE Debug - Failed to stop spi transfer");
+		}
+
 	} else {
-		size_t rx_len = spi_context_total_rx_len(ctx);
-		size_t tx_len = spi_context_total_tx_len(ctx);
-		uint8_t rx_buf_temp[rx_len - tx_len];
 
-		data->cmdq_data.spi_write_cmd_length = ctx->tx_len;
-		data->cmdq_data.command.fields.read_write = 1;
-		data->cmdq_data.data_length_lb = rx_len - ctx->tx_len;
-		data->cmdq_data.data_length_hb = 0;
-		data->cmdq_data.data_addr_lb = 0;
-		data->cmdq_data.data_addr_hb = 0;
+		LOG_HEXDUMP_ERR(ctx->tx_buf, ctx->tx_len, "TX: ");
+		for (size_t i = 0; i < ctx->tx_len; i++) {
+			ite_intc_isr_clear(cfg->spi_irq);
+			irq_enable(cfg->spi_irq);
+			reg_val = sys_read8(cfg->base + SPI01_CTRL1);
+			reg_val |= INTERRUPT_EN;
+			sys_write8(reg_val, cfg->base + SPI01_CTRL1);
 
-		if (ctx->config->slave == 0) {
-				sys_write8((uint8_t)(data->spi_cmdq_header_addr & 0x000000FF),
-					   cfg->base + SPI05_CH0_CMD_ADDR_LB);
-				sys_write8((uint8_t)((data->spi_cmdq_header_addr & 0x0000FF00) >> 8),
-					   cfg->base + SPI06_CH0_CMD_ADDR_HB);
+			sys_write8(ctx->tx_buf[i], cfg->base + SPI00_SPIDATA);
 
-				sys_write8((uint8_t)((uint32_t)rx_buf_temp & 0x000000FF),
-					   cfg->base + SPI0E_CH0_WR_MEM_ADDR_LB);
-				sys_write8((uint8_t)(((uint32_t)rx_buf_temp & 0x0000FF00) >> 8),
-					   cfg->base + SPI0F_CH0_WR_MEM_ADDR_HB);
-		} else {
-				sys_write8((uint8_t)(data->spi_cmdq_header_addr & 0x000000FF),
-					   cfg->base + SPI12_CH1_CMD_ADDR_LB);
-				sys_write8((uint8_t)((data->spi_cmdq_header_addr & 0x0000FF00) >> 8),
-					   cfg->base + SPI13_CH1_CMD_ADDR_HB);
+			reg_val = sys_read8(cfg->base + SPI02_CTRL2);
+			reg_val &= ~READ_CYCLE;
+			reg_val &= ~BLOCK_SELECT;
+			sys_write8(reg_val, cfg->base + SPI02_CTRL2);
 
-				sys_write8((uint8_t)((uint32_t)rx_buf_temp & 0x000000FF),
-					   cfg->base + SPI14_CH1_WR_MEM_ADDR_LB);
-				sys_write8((uint8_t)(((uint32_t)rx_buf_temp & 0x0000FF00) >> 8),
-					   cfg->base + SPI15_CH1_WR_MEM_ADDR_HB);
-		}
+			if (ctx->config->slave == 0) {
+				sys_write8(CH0_START, cfg->base + SPI03_STS);
+			} else {
+				sys_write8(CH1_START, cfg->base + SPI03_STS);
+			}
+			k_sem_take(&data->spi_sem, K_FOREVER);
+		};
 
-		chip_block_idle();
+		spi_context_update_rx(ctx, 1, ctx->rx_len);
+		spi_context_update_tx(ctx, 1, ctx->tx_len);
 
-		reg_val = sys_read8(cfg->base + SPI0D_CTRL5);
-		reg_val |= (ctx->config->slave == 0)? CH0_SEL_CMDQ:CH1_SEL_CMDQ;
-		sys_write8(reg_val | CMDQ_MODE_EN, cfg->base + SPI0D_CTRL5);
+		for (size_t i = 0; i < ctx->rx_len; i++) {
 
-		k_sem_take(&data->spi_sem, K_FOREVER);
+			ite_intc_isr_clear(cfg->spi_irq);
+			irq_enable(cfg->spi_irq);
+			reg_val = sys_read8(cfg->base + SPI01_CTRL1);
+			reg_val |= INTERRUPT_EN;
+			sys_write8(reg_val, cfg->base + SPI01_CTRL1);
 
-		if (ctx->rx_buf == ctx->tx_buf) {
-			spi_context_update_rx(ctx, 1, ctx->rx_len);
-			memcpy(ctx->rx_buf, rx_buf_temp, ctx->rx_len);
-		} else {
-			memcpy(ctx->rx_buf, rx_buf_temp, ctx->rx_len);
-		}
-		LOG_HEXDUMP_DBG(ctx->rx_buf, ctx->rx_len, "rx:");
+			reg_val = sys_read8(cfg->base + SPI02_CTRL2);
+			reg_val |= READ_CYCLE;
+			reg_val &= ~BLOCK_SELECT;
+			sys_write8(reg_val, cfg->base + SPI02_CTRL2);
+
+			if (ctx->config->slave == 0) {
+				sys_write8(CH0_START, cfg->base + SPI03_STS);
+			} else {
+				sys_write8(CH1_START, cfg->base + SPI03_STS);
+			}
+
+			k_sem_take(&data->spi_sem, K_FOREVER);
+			ctx->rx_buf[i] = sys_read8(cfg->base + SPI00_SPIDATA);
+			if (i == ctx->rx_len - 1) {
+				sys_write8(SPI_TRANS_END, cfg->base + SPI03_STS);
+				reg_val = sys_read8(cfg->base + SPI03_STS);
+				if ((reg_val & SPI_TRANS_END_FLAG) == SPI_TRANS_END_FLAG) {
+					sys_write8(SPI_TRANS_END_FLAG, cfg->base + SPI03_STS);
+				} else {
+					LOG_ERR("ITE Debug - Failed to stop spi transfer");
+				}
+			}
+		};
+		LOG_HEXDUMP_ERR(ctx->rx_buf, ctx->rx_len, "RX: ");
 	}
-
-	spi_context_cs_control(ctx, false);
-
-	reg_val = sys_read8(cfg->base + SPI0C_INT_STS);
-	reg_val |= SPI_CMDQ_BUS_END;
-	sys_write8(reg_val, cfg->base + SPI0C_INT_STS);
+	LOG_ERR("After tx_len %d, rx_len %d", ctx->tx_len, ctx->rx_len);
 
 	spi_context_complete(ctx, dev, 0);
+
 }
 
 static int it8xxx2_transceive(const struct device *dev, const struct spi_config *spi_cfg,
@@ -384,9 +442,6 @@ static int it8xxx2_transceive(const struct device *dev, const struct spi_config 
 
 	if (!tx_bufs && !rx_bufs) {
 		return 0;
-	}
-	if (!rx_bufs) {
-		LOG_ERR("RX BUF NULL");
 	}
 
 	spi_context_lock(ctx, false, NULL, NULL, spi_cfg);
@@ -445,22 +500,30 @@ static void it8xxx2_spi_isr(const void *arg)
 
 	irq_disable(cfg->spi_irq);
 
-	reg_val = sys_read8(cfg->base + SPI0C_INT_STS);
-	reg_val |= SPI_CMDQ_BUS_END;
-	sys_write8(reg_val, cfg->base + SPI0C_INT_STS);
+	// reg_val = sys_read8(cfg->base + SPI0C_INT_STS);
+	// reg_val |= SPI_CMDQ_BUS_END;
+	// sys_write8(reg_val, cfg->base + SPI0C_INT_STS);
 
 	ite_intc_isr_clear(cfg->spi_irq);
 
-	reg_val = sys_read8(cfg->base + SPI0D_CTRL5);
-	if (ctx->config->slave == 0) {
-		reg_val &= ~CH0_SEL_CMDQ;
-	} else {
-		reg_val &= ~CH1_SEL_CMDQ;
-	}
-	sys_write8(reg_val, cfg->base + SPI0D_CTRL5);
+	// reg_val = sys_read8(cfg->base + SPI0D_CTRL5);
+	// if (ctx->config->slave == 0) {
+	// 	reg_val &= ~CH0_SEL_CMDQ;
+	// } else {
+	// 	reg_val &= ~CH1_SEL_CMDQ;
+	// }
+	// sys_write8(reg_val, cfg->base + SPI0D_CTRL5);
+	// LOG_ERR("SPI02_CTRL2 0x%x", sys_read8(cfg->base + SPI02_CTRL2));
+	// LOG_ERR("SPI0C_INT_STS 0x%x", sys_read8(cfg->base + SPI0C_INT_STS));
+	// if ((sys_read8(cfg->base + SPI02_CTRL2) & READ_CYCLE) == READ_CYCLE) {
+	// 	spi_context_update_rx(ctx, 1, ctx->rx_len);
+	// } else {
+	// 	spi_context_update_tx(ctx, 1, ctx->tx_len);
+	// }
 
 	k_sem_give(&data->spi_sem);
 	chip_permit_idle();
+	// spi_it8xxx2_xfer(dev);
 }
 
 static int spi_it8xxx2_init(const struct device *dev)

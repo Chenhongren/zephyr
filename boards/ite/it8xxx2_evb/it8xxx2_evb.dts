@@ -20,6 +20,7 @@
 		kscan0 = &kscan_input;
 		watchdog0 = &twd0;
 		pwm-0 = &pwm0;
+		spi-flash0 = &mx25r16;
 	};
 
 	chosen {
