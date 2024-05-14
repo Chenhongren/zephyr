@@ -32,6 +32,7 @@
 		gpiogcr: gpio-gcr@f03e00 {
 			compatible = "ite,it8xxx2-gpiogcr";
 			reg = <0x00f03e00 0x2f>;
+			#spi-io-mode-cells = <2>;
 		};
 
 		gpioa: gpio@f01601 {
@@ -1015,6 +1016,18 @@
 		sha0: crypto@f03c00 {
 			compatible = "ite,it8xxx2-sha-v2";
 			reg = <0x00f03c00 0x5>;
+			status = "disabled";
+		};
+
+		spi0: spi@f02600  {
+			#address-cells = <1>;
+			#size-cells = <0>;
+			compatible = "ite,it8xxx2-spi";
+			reg = <0x00f02600 0x34>;
+			interrupt-parent = <&intc>;
+			interrupts = <37 IRQ_TYPE_EDGE_RISING>;
+			spi-io-modes = <&gpiogcr 0x26 4>, <&gpiogcr 0x26 6>;
+			spi-io-mode-names = "dual", "quad";
 			status = "disabled";
 		};
 	};
