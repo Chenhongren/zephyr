@@ -1,0 +1,39 @@
+/*
+ * Copyright (c) 2024 ITE Corporation. All Rights Reserved.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+/ {
+	aliases {
+		spi-flash0 = &mx25r16;
+	};
+};
+
+ &spi0 {
+	status = "okay";
+	cs-gpios = <&gpiob 6 GPIO_ACTIVE_LOW>,
+		    <&gpiob 7 GPIO_ACTIVE_LOW>;
+	pinctrl-0 = <&spi_ssce0_default
+		     &spi_ssce1_default
+		     &spi_ssck_default
+		     &spi_smosi_default
+		     &spi_smiso_default>;
+	pinctrl-names = "default";
+
+	mx25l10: mx25l1006e@0 {
+		compatible = "jedec,spi-nor";
+		reg = <0>;
+		spi-max-frequency = <1500000>;
+		jedec-id = [c2 20 11];
+		size = <0x100000>; // 1Mb
+	};
+
+	mx25r16: mx25v1635f@1 {
+		compatible = "jedec,spi-nor";
+		reg = <1>;
+		spi-max-frequency = <1500000>;
+		jedec-id = [c2 23 15];
+		size = <0x1000000>; // 16Mb
+	};
+};
