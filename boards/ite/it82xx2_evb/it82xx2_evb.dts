@@ -20,6 +20,7 @@
 		kscan0 = &kscan_input;
 		watchdog0 = &twd0;
 		pwm-0 = &pwm0;
+		spi-flash0 = &mx25r16;
 	};
 
 	chosen {
@@ -163,7 +164,7 @@
 };
 
 &kbd {
-	status = "okay";
+	status = "disabled";
 	pinctrl-0 = <&ksi0_default
 		     &ksi1_default
 		     &ksi2_default
@@ -227,5 +228,36 @@ zephyr_udc0: &usb0 {
 			label = "storage";
 			reg = <0x00040000 DT_SIZE_K(256)>;
 		};
+	};
+};
+
+&spi0 {
+	status = "okay";
+	quad-mode;
+	cs-gpios = <&gpioe 1 GPIO_ACTIVE_LOW>,
+		    <&gpiob 7 GPIO_ACTIVE_LOW>;
+	pinctrl-0 = <&spi_ssce0_default
+		     &spi_ssce1_default
+		     &spi_ssck_default
+		     &spi_smosi_default
+		     &spi_smiso_default>;
+	pinctrl-1 = <&spi_sio2_default
+		     &spi_sio3_default>;
+	pinctrl-names = "default", "quad_mode";
+
+	mx25l10: mx25l1006e@0 {
+		compatible = "jedec,spi-nor";
+		reg = <0>;
+		spi-max-frequency = <1500000>;
+		jedec-id = [c2 20 11];
+		size = <0x100000>; // 1Mb
+	};
+
+	mx25r16: mx25v1633f@1 {
+		compatible = "jedec,spi-nor";
+		reg = <1>;
+		spi-max-frequency = <1500000>;
+		jedec-id = [c2 24 15];
+		size = <0x1000000>; // 16Mb
 	};
 };
