@@ -1,0 +1,27 @@
+# Copyright (c) 2025 ITE Corporation. All Rights Reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+description: ITE Interrupt controller
+compatible: "ite,it51xxx-intc"
+
+include: [interrupt-controller.yaml, base.yaml]
+
+properties:
+  reg:
+    required: true
+
+  isr-reg:
+    type: array
+
+  ier-reg:
+    type: array
+
+  ielmr-reg:
+    type: array
+
+  ipolr-reg:
+    type: array
+
+interrupt-cells:
+  - irq
+  - flags

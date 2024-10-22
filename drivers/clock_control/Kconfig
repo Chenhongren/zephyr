@@ -104,4 +104,6 @@ source "drivers/clock_control/Kconfig.silabs"
 
 source "drivers/clock_control/Kconfig.wch_rcc"
 
+source "drivers/clock_control/Kconfig.it51xxx"
+
 endif # CLOCK_CONTROL
