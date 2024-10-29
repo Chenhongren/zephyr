@@ -46,42 +46,6 @@ COND_CODE_1(DT_NODE_EXISTS(DT_INST(1, ite_it8xxx2_usbpd)), (2), (1))
 #define PLL_FREQ_AUTO_CAL_START    BIT(0)
 #define AUTO_CAL_ENABLE_AND_START  (AUTO_CAL_ENABLE | PLL_FREQ_AUTO_CAL_START)
 
-uint32_t chip_get_pll_freq(void)
-{
-	uint32_t pllfreq;
-
-	switch (IT8XXX2_ECPM_PLLFREQR & 0x0F) {
-	case 0:
-		pllfreq = MHZ(8);
-		break;
-	case 1:
-		pllfreq = MHZ(16);
-		break;
-	case 2:
-		pllfreq = MHZ(24);
-		break;
-	case 3:
-		pllfreq = MHZ(32);
-		break;
-	case 4:
-		pllfreq = MHZ(48);
-		break;
-	case 5:
-		pllfreq = MHZ(64);
-		break;
-	case 6:
-		pllfreq = MHZ(72);
-		break;
-	case 7:
-		pllfreq = MHZ(96);
-		break;
-	default:
-		return -ERANGE;
-	}
-
-	return pllfreq;
-}
-
 void __soc_ram_code chip_pll_ctrl(enum chip_pll_mode mode)
 {
 	volatile uint8_t _pll_ctrl __unused;

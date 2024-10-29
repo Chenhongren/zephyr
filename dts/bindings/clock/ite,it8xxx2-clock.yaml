@@ -1,0 +1,17 @@
+# Copyright (c) 2024 ITE Corporation.
+# SPDX-License-Identifier: Apache-2.0
+
+description: it8xxx2 ECPM node
+
+compatible: "ite,it8xxx2-ecpm"
+
+include: [clock-controller.yaml, base.yaml]
+
+properties:
+  reg:
+    required: true
+
+clock-cells:
+- bus
+- ctrl
+- bit

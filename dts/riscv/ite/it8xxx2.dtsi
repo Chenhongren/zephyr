@@ -6,6 +6,7 @@
  */
 
 #include <mem.h>
+#include <zephyr/dt-bindings/clock/it8xxx2_clock.h>
 #include <zephyr/dt-bindings/dt-util.h>
 #include <zephyr/dt-bindings/adc/adc.h>
 #include <zephyr/dt-bindings/interrupt-controller/ite-intc.h>
@@ -544,8 +545,9 @@
 
 		ecpm: clock-controller@f01e00 {
 			compatible = "ite,it8xxx2-ecpm";
-			reg = <0x00f01e00 0x11>;
+			reg = <0x00f01e00 0x57>;
 			reg-names = "ecpm";
+			#clock-cells = <3>;
 		};
 		prs: pwmprs@f01800 {
 			compatible = "ite,it8xxx2-pwmprs";

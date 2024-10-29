@@ -90,13 +90,6 @@ properties:
     description: |
       The SDA pin for the selected port.
 
-  clock-gate-offset:
-    type: int
-    required: true
-    description: |
-      The clock gate offsets combine the register offset from
-      ECPM_BASE and the mask within that register into one value.
-
   transfer-timeout-ms:
     type: int
     default: 100
@@ -114,3 +107,6 @@ properties:
     description: |
       This property is enabled when selecting the push-pull GPIO output
       type to drive the I2C recovery. The default is open-drain.
+
+  clocks:
+    required: true

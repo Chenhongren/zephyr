@@ -48,6 +48,9 @@ config GEN_SW_ISR_TABLE
 config RISCV_SOC_INTERRUPT_INIT
 	default y
 
+config CLOCK_CONTROL
+	default y
+
 rsource "Kconfig.defconfig.it8*"
 
 endif # SOC_SERIES_IT8XXX2

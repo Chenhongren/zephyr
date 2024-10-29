@@ -21,6 +21,9 @@ properties:
     type: phandles
     required: true
 
+  max-frequency:
+    type: int
+
   quad-mode:
     type: boolean
     description: |
@@ -37,3 +40,6 @@ properties:
     type: string-array
     description: |
       Names of each spi-io-modes entry.
+
+  clocks:
+    required: true

@@ -363,8 +363,8 @@
 			channel-switch-sel = <I2C_CHA_LOCATE>;
 			scl-gpios = <&gpiob 3 0>;
 			sda-gpios = <&gpiob 4 0>;
-			clock-gate-offset = <CGC_OFFSET_SMBA>;
 			fifo-enable;   /* FIFO1 */
+			clocks = <&ecpm IT8XXX2_SMB_MODULE 0x09 2>;
 		};
 
 		i2c1: i2c@f01c80 {
@@ -380,8 +380,8 @@
 			channel-switch-sel = <I2C_CHB_LOCATE>;
 			scl-gpios = <&gpioc 1 0>;
 			sda-gpios = <&gpioc 2 0>;
-			clock-gate-offset = <CGC_OFFSET_SMBB>;
 			fifo-enable;   /* FIFO2 */
+			clocks = <&ecpm IT8XXX2_SMB_MODULE 0x09 3>;
 		};
 
 		i2c2: i2c@f01cc0 {
@@ -397,8 +397,8 @@
 			channel-switch-sel = <I2C_CHC_LOCATE>;
 			scl-gpios = <&gpiof 6 0>;
 			sda-gpios = <&gpiof 7 0>;
-			clock-gate-offset = <CGC_OFFSET_SMBC>;
 			/delete-property/ fifo-enable;   /* FIFO2 */
+			clocks = <&ecpm IT8XXX2_SMB_MODULE 0x09 4>;
 		};
 
 		i2c3: i2c@f03680 {
@@ -413,7 +413,7 @@
 			channel-switch-sel = <I2C_CHD_LOCATE>;
 			scl-gpios = <&gpioh 1 0>;
 			sda-gpios = <&gpioh 2 0>;
-			clock-gate-offset = <CGC_OFFSET_SMBD>;
+			clocks = <&ecpm IT8XXX2_SMB_MODULE 0x09 5>;
 		};
 
 		i2c4: i2c@f03500 {
@@ -428,7 +428,7 @@
 			channel-switch-sel = <I2C_CHE_LOCATE>;
 			scl-gpios = <&gpioe 0 0>;
 			sda-gpios = <&gpioe 7 0>;
-			clock-gate-offset = <CGC_OFFSET_SMBE>;
+			clocks = <&ecpm IT8XXX2_SMB_MODULE 0x09 6>;
 		};
 
 		i2c5: i2c@f03580 {
@@ -443,7 +443,7 @@
 			channel-switch-sel = <I2C_CHF_LOCATE>;
 			scl-gpios = <&gpioa 4 0>;
 			sda-gpios = <&gpioa 5 0>;
-			clock-gate-offset = <CGC_OFFSET_SMBF>;
+			clocks = <&ecpm IT8XXX2_SMB_MODULE 0x09 7>;
 		};
 
 		wuc1: wakeup-controller@f01b00 {
@@ -637,6 +637,7 @@
 			interrupts = <37 IRQ_TYPE_EDGE_RISING>;
 			spi-io-modes = <&gctrl 0x46 2>;
 			spi-io-mode-names = "dual";
+			clocks = <&ecpm IT8XXX2_SSPI_MODULE 0x05 1>;
 			status = "disabled";
 		};
 	};

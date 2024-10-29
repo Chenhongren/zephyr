@@ -1,0 +1,13 @@
+/*
+ * Copyright (c) 2024 ITE Technology Inc.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+#ifndef ZEPHYR_INCLUDE_DT_BINDINGS_CLOCK_IT8XXX2_H_
+#define ZEPHYR_INCLUDE_DT_BINDINGS_CLOCK_IT8XXX2_H_
+
+#define IT8XXX2_SSPI_MODULE 0
+#define IT8XXX2_SMB_MODULE  1
+
+#endif /* ZEPHYR_INCLUDE_DT_BINDINGS_CLOCK_IT8XXX2_H_ */

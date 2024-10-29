@@ -10,12 +10,15 @@
 LOG_MODULE_REGISTER(spi_it8xxx2, CONFIG_SPI_LOG_LEVEL);
 
 #include <zephyr/irq.h>
+#include <zephyr/drivers/clock_control.h>
 #include <zephyr/drivers/spi.h>
 #include <zephyr/drivers/pinctrl.h>
 #include <zephyr/pm/policy.h>
 #include <soc.h>
 
 #include "spi_context.h"
+#include "soc_clock.h"
+#include "soc_dt.h"
 
 #define BYTE_0(x) (uint8_t)(((x) >> 0) & 0xFF)
 #define BYTE_1(x) (uint8_t)(((x) >> 8) & 0xFF)
@@ -98,12 +101,15 @@ typedef struct {
 } io_mode_t;
 
 struct spi_it8xxx2_config {
+	const struct device *clk_dev;
+	const struct it8xxx2_clk_cfg clk_cfg;
 	mm_reg_t base;
 	const struct pinctrl_dev_config *pcfg;
 	bool quad_mode_en;
 	uint8_t spi_irq;
 	io_mode_t dual_pin;
 	io_mode_t quad_pin;
+	uint32_t max_frequency;
 };
 
 struct spi_it8xxx2_data {
@@ -116,12 +122,18 @@ struct spi_it8xxx2_data {
 static inline int spi_it8xxx2_set_freq(const struct device *dev, const uint32_t frequency)
 {
 	const struct spi_it8xxx2_config *cfg = dev->config;
+	int ret;
 	uint8_t freq_div[8] = {2, 4, 6, 8, 10, 12, 14, 16};
-	uint32_t clk_pll, clk_sspi;
+	uint32_t clk_sspi;
 	uint8_t reg_val;
 
-	clk_pll = chip_get_pll_freq();
-	clk_sspi = clk_pll / (((IT8XXX2_ECPM_SCDCR2 & 0xF0) >> 4) + 1U);
+	ret = clock_control_get_rate(cfg->clk_dev, (clock_control_subsys_t)&cfg->clk_cfg,
+				     &clk_sspi);
+	if (ret) {
+		LOG_ERR("Failed to get sspi clock %d", ret);
+		return ret;
+	}
+
 	if (frequency < (clk_sspi / 16) || frequency > clk_sspi) {
 		LOG_ERR("Unsupported frequency %d", frequency);
 		return -ENOTSUP;
@@ -147,7 +159,7 @@ static inline int spi_it8xxx2_set_freq(const struct device *dev, const uint32_t 
 		}
 	}
 
-	LOG_DBG("freq: pll %dHz, sspi %dHz, ssck %dHz", clk_pll, clk_sspi, frequency);
+	LOG_INF("freq: sspi %dHz, ssck %dHz", clk_sspi, frequency);
 	return 0;
 }
 
@@ -606,6 +618,19 @@ static int spi_it8xxx2_init(const struct device *dev)
 		return ret;
 	}
 
+	ret = clock_control_set_rate(cfg->clk_dev, (clock_control_subsys_t)&cfg->clk_cfg,
+				     (clock_control_subsys_rate_t)cfg->max_frequency);
+	if (ret) {
+		LOG_ERR("Failed to set the max. SSPI frequency");
+		return ret;
+	}
+
+	ret = clock_control_on(cfg->clk_dev, (clock_control_subsys_t)&cfg->clk_cfg);
+	if (ret) {
+		LOG_ERR("Failed to trun on sspi clock");
+		return ret;
+	}
+
 	/* Enable one-shot mode */
 	sys_write8(sys_read8(cfg->base + SPI04_CTRL3) & ~AUTO_MODE, cfg->base + SPI04_CTRL3);
 
@@ -640,6 +665,9 @@ static const struct spi_driver_api spi_it8xxx2_driver_api = {
 #define SPI_IT8XXX2_INIT(n)                                                                        \
 	PINCTRL_DT_INST_DEFINE(n);                                                                 \
 	static const struct spi_it8xxx2_config spi_it8xxx2_cfg_##n = {                             \
+		.clk_dev = DEVICE_DT_GET(DT_INST_CLOCKS_CTLR(n)),                                  \
+		.clk_cfg = IT8XXX2_DT_CLOCK_CONFIG_ITEMS(n),                                       \
+		.max_frequency = DT_INST_PROP_OR(n, max_frequency, MHZ(24)),                       \
 		.base = DT_INST_REG_ADDR(n),                                                       \
 		.pcfg = PINCTRL_DT_INST_DEV_CONFIG_GET(n),                                         \
 		.spi_irq = DT_INST_IRQ(n, irq),                                                    \

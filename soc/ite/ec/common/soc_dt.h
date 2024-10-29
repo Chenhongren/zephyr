@@ -86,4 +86,10 @@
 		inst)                                                   \
 	}
 
+#define IT8XXX2_DT_CLOCK_CONFIG_ITEMS(inst)                                                        \
+	{                                                                                          \
+		.bus = DT_INST_CLOCKS_CELL(inst, bus), .ctrl = DT_INST_CLOCKS_CELL(inst, ctrl),    \
+		.bit = DT_INST_CLOCKS_CELL(inst, bit),                                             \
+	}
+
 #endif /* _ITE_IT8XXX2_SOC_DT_H_ */
