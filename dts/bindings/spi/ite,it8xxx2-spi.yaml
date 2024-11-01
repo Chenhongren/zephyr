@@ -20,3 +20,20 @@ properties:
   pinctrl-0:
     type: phandles
     required: true
+
+  quad-mode:
+    type: boolean
+    description: |
+      Enable quad mode
+
+  spi-io-modes:
+    type: phandle-array
+    description: |
+      SPI IO modes(dual/quad mode) entries, e.g. <&phandles OFFSET BIT>.
+      The bits must be configured to enable SPI dual/quad GPIO pin
+      before starting communication.
+
+  spi-io-mode-names:
+    type: string-array
+    description: |
+      Names of each spi-io-modes entry.

@@ -1,0 +1,20 @@
+# Copyright (c) 2024 ITE Corporation. All Rights Reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+description: IT8XXX2 GPIO General Control
+
+compatible: "ite,it8xxx2-gpiogcr"
+
+include: [base.yaml]
+
+properties:
+  reg:
+    required: true
+
+  "#spi-io-mode-cells":
+    type: int
+    const: 2
+
+spi-io-mode-cells:
+- offset
+- bit

@@ -32,6 +32,11 @@ LOG_MODULE_REGISTER(spi_it8xxx2, CONFIG_SPI_LOG_LEVEL);
 #define CLOCK_POLARTY  BIT(6)
 #define SSCK_FREQ_MASK (BIT(2) | BIT(3) | BIT(4))
 #define INTERRUPT_EN   BIT(1)
+#define CH0_3_WIRE_EN  BIT(0)
+
+#define SPI02_CTRL2     0x02
+#define BYTE_WIDTH_MASK (BIT(3) | BIT(4) | BIT(5))
+#define CH1_3_WIRE_EN   BIT(0)
 
 #define SPI04_CTRL3 0x04
 #define AUTO_MODE   BIT(5)
@@ -87,10 +92,18 @@ struct spi_it8xxx2_cmdq_data {
 	uint8_t write_data[SPI_CMDQ_WR_CMD_LEN_MAX];
 };
 
+typedef struct {
+	mm_reg_t addr;
+	uint8_t bit;
+} io_mode_t;
+
 struct spi_it8xxx2_config {
 	mm_reg_t base;
 	const struct pinctrl_dev_config *pcfg;
+	bool quad_mode_en;
 	uint8_t spi_irq;
+	io_mode_t dual_pin;
+	io_mode_t quad_pin;
 };
 
 struct spi_it8xxx2_data {
@@ -138,6 +151,104 @@ static inline int spi_it8xxx2_set_freq(const struct device *dev, const uint32_t 
 	return 0;
 }
 
+static inline void spi_it8xxx2_enable_3_wire(const struct device *dev, const uint8_t cs,
+					     const bool enable)
+{
+	const struct spi_it8xxx2_config *cfg = dev->config;
+	uint8_t reg_val;
+
+	switch (cs) {
+	case 0:
+		reg_val = sys_read8(cfg->base + SPI01_CTRL1);
+		if (enable) {
+			reg_val |= CH0_3_WIRE_EN;
+		} else {
+			reg_val &= ~CH0_3_WIRE_EN;
+		}
+		sys_write8(reg_val, cfg->base + SPI01_CTRL1);
+		break;
+	case 1:
+		reg_val = sys_read8(cfg->base + SPI02_CTRL2);
+		if (enable) {
+			reg_val |= CH1_3_WIRE_EN;
+		} else {
+			reg_val &= ~CH1_3_WIRE_EN;
+		}
+		sys_write8(reg_val, cfg->base + SPI02_CTRL2);
+		break;
+	default:
+		return;
+	};
+}
+
+static inline void spi_it8xxx2_enable_quad_pin(const struct device *dev, const bool enable)
+{
+	const struct spi_it8xxx2_config *cfg = dev->config;
+	uint8_t reg_val;
+
+	if (!cfg->quad_mode_en) {
+		return;
+	}
+	reg_val = sys_read8(cfg->quad_pin.addr);
+	if (enable) {
+		reg_val |= BIT(cfg->quad_pin.bit);
+	} else {
+		reg_val &= ~BIT(cfg->quad_pin.bit);
+	}
+	sys_write8(reg_val, cfg->quad_pin.addr);
+}
+
+static inline void spi_it8xxx2_enable_dual_pin(const struct device *dev, const bool enable)
+{
+	const struct spi_it8xxx2_config *cfg = dev->config;
+	uint8_t reg_val;
+
+	reg_val = sys_read8(cfg->dual_pin.addr);
+	if (enable) {
+		reg_val |= BIT(cfg->dual_pin.bit);
+	} else {
+		reg_val &= ~BIT(cfg->dual_pin.bit);
+	}
+	sys_write8(reg_val, cfg->dual_pin.addr);
+}
+
+static inline int spi_it8xxx2_set_line_mode(const struct device *dev,
+					    const struct spi_config *spi_cfg)
+{
+	const struct spi_it8xxx2_config *cfg = dev->config;
+	uint32_t operation = spi_cfg->operation;
+
+	switch (operation & SPI_LINES_MASK) {
+	case SPI_LINES_SINGLE:
+		spi_it8xxx2_enable_3_wire(dev, spi_cfg->slave, false);
+		spi_it8xxx2_enable_dual_pin(dev, false);
+		spi_it8xxx2_enable_quad_pin(dev, false);
+		LOG_DBG("Single mode is selected");
+		break;
+	case SPI_LINES_DUAL:
+		spi_it8xxx2_enable_3_wire(dev, spi_cfg->slave, true);
+		spi_it8xxx2_enable_dual_pin(dev, true);
+		spi_it8xxx2_enable_quad_pin(dev, false);
+		LOG_DBG("Dual mode is selected");
+		break;
+	case SPI_LINES_QUAD:
+		if (!cfg->quad_mode_en) {
+			LOG_ERR("Quad mode is disabled");
+			return -ENOTSUP;
+		}
+		spi_it8xxx2_enable_3_wire(dev, spi_cfg->slave, true);
+		spi_it8xxx2_enable_dual_pin(dev, false);
+		spi_it8xxx2_enable_quad_pin(dev, true);
+		LOG_DBG("Quad mode is selected");
+		break;
+	case SPI_LINES_OCTAL:
+		__fallthrough;
+	default:
+		return -ENOTSUP;
+	}
+	return 0;
+}
+
 static int spi_it8xxx2_configure(const struct device *dev, const struct spi_config *spi_cfg)
 {
 	const struct spi_it8xxx2_config *cfg = dev->config;
@@ -180,10 +291,11 @@ static int spi_it8xxx2_configure(const struct device *dev, const struct spi_conf
 		return -ENOTSUP;
 	}
 
-	if (IS_ENABLED(CONFIG_SPI_EXTENDED_MODES) &&
-	    (spi_cfg->operation & SPI_LINES_MASK) != SPI_LINES_SINGLE) {
-		LOG_ERR("Only single line mode is supported");
-		return -EINVAL;
+	if (IS_ENABLED(CONFIG_SPI_EXTENDED_MODES)) {
+		ret = spi_it8xxx2_set_line_mode(dev, spi_cfg);
+		if (ret) {
+			return ret;
+		}
 	}
 
 	ret = spi_it8xxx2_set_freq(dev, spi_cfg->frequency);
@@ -337,6 +449,13 @@ static int spi_it8xxx2_next_xfer(const struct device *dev)
 	}
 
 	memset(&data->cmdq_data, 0, sizeof(struct spi_it8xxx2_cmdq_data));
+	if (IS_ENABLED(CONFIG_SPI_EXTENDED_MODES)) {
+		if ((ctx->config->operation & SPI_LINES_MASK) == SPI_LINES_DUAL) {
+			data->cmdq_data.command.fields.cmd_mode = 2;
+		} else if ((ctx->config->operation & SPI_LINES_MASK) == SPI_LINES_QUAD) {
+			data->cmdq_data.command.fields.cmd_mode = 1;
+		}
+	}
 
 	/* Prepare command queue data */
 	if (!spi_context_tx_on(ctx)) {
@@ -511,12 +630,23 @@ static const struct spi_driver_api spi_it8xxx2_driver_api = {
 #endif
 };
 
+#define IT8XXX2_SPI_IO_MODE(inst, name)                                                            \
+	{                                                                                          \
+		.addr = DT_REG_ADDR(DT_PHANDLE_BY_NAME(DT_DRV_INST(inst), spi_io_modes, name)) +   \
+			DT_PHA_BY_NAME(DT_DRV_INST(inst), spi_io_modes, name, offset),             \
+		.bit = DT_PHA_BY_NAME(DT_DRV_INST(inst), spi_io_modes, name, bit),                 \
+	}
+
 #define SPI_IT8XXX2_INIT(n)                                                                        \
 	PINCTRL_DT_INST_DEFINE(n);                                                                 \
 	static const struct spi_it8xxx2_config spi_it8xxx2_cfg_##n = {                             \
 		.base = DT_INST_REG_ADDR(n),                                                       \
 		.pcfg = PINCTRL_DT_INST_DEV_CONFIG_GET(n),                                         \
 		.spi_irq = DT_INST_IRQ(n, irq),                                                    \
+		.quad_mode_en = DT_INST_PROP_OR(n, quad_mode, false),                              \
+		.dual_pin = IT8XXX2_SPI_IO_MODE(n, dual),                                          \
+		.quad_pin = COND_CODE_1(DT_INST_PROP_OR(n, quad_mode, false),                      \
+			(IT8XXX2_SPI_IO_MODE(n, quad)), ({.addr = 0})),                           \
 	};                                                                                         \
                                                                                                    \
 	static struct spi_it8xxx2_data spi_it8xxx2_data_##n = {                                    \

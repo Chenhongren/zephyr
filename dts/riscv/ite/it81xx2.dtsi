@@ -635,6 +635,8 @@
 			reg = <0x00f02600 0x34>;
 			interrupt-parent = <&intc>;
 			interrupts = <37 IRQ_TYPE_EDGE_RISING>;
+			spi-io-modes = <&gctrl 0x46 2>;
+			spi-io-mode-names = "dual";
 			status = "disabled";
 		};
 	};
