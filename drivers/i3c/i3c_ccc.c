@@ -255,6 +255,7 @@ int i3c_ccc_do_entas(const struct i3c_device_desc *target, uint8_t as)
 
 	ccc_tgt_payload.addr = target->dynamic_addr;
 	ccc_tgt_payload.rnw = 0;
+	ccc_tgt_payload.data_len = 0;
 
 	ccc_payload.ccc.id = I3C_CCC_ENTAS(as, false);
 	ccc_payload.targets.payloads = &ccc_tgt_payload;
@@ -672,6 +673,7 @@ int i3c_ccc_do_setvendor(const struct i3c_device_desc *target,
 			 size_t len)
 {
 	struct i3c_ccc_payload ccc_payload;
+	struct i3c_ccc_target_payload ccc_tgt_payload;
 
 	__ASSERT_NO_MSG(target != NULL);
 
@@ -680,10 +682,21 @@ int i3c_ccc_do_setvendor(const struct i3c_device_desc *target,
 		return -EINVAL;
 	}
 
+	/* target payload is missging
+	 * hardcode for test
+	 */
+	uint8_t tgt_payload[1] = {0xAA};
+	ccc_tgt_payload.addr = target->dynamic_addr;
+	ccc_tgt_payload.rnw = 0;
+	ccc_tgt_payload.data = tgt_payload;
+	ccc_tgt_payload.data_len = sizeof(tgt_payload);
+
 	memset(&ccc_payload, 0, sizeof(ccc_payload));
 	ccc_payload.ccc.id = I3C_CCC_VENDOR(false, id);
 	ccc_payload.ccc.data = payload;
 	ccc_payload.ccc.data_len = len;
+	ccc_payload.targets.payloads = &ccc_tgt_payload;
+	ccc_payload.targets.num_targets = 1;
 
 	return i3c_do_ccc(target->bus, &ccc_payload);
 }
