@@ -115,6 +115,40 @@
 		pinmuxs = <&pinctrlf 1 IT8XXX2_ALT_FUNC_1>;
 	};
 
+	/* I3C alternate function - pull-up configurations */
+	i3c0_clk_gpj3_pull: i3c0_clk_gpj3_pull {
+		pinmuxs = <&pinctrlj 3 IT8XXX2_ALT_FUNC_1>;
+		bias-pull-up;
+	};
+	i3c0_data_gpj4_pull: i3c0_data_gpj4_pull {
+		pinmuxs = <&pinctrlj 4 IT8XXX2_ALT_FUNC_1>;
+		bias-pull-up;
+	};
+	i3c1_clk_gpj5_pull: i3c1_clk_gpj5_pull {
+		pinmuxs = <&pinctrlj 5 IT8XXX2_ALT_FUNC_1>;
+		bias-pull-up;
+	};
+	i3c1_data_gpe1_pull: i3c1_data_gpe1_pull {
+		pinmuxs = <&pinctrle 1 IT8XXX2_ALT_FUNC_1>;
+		bias-pull-up;
+	};
+	i3c2_clk_gpe2_pull: i3c2_clk_gpe2_pull {
+		pinmuxs = <&pinctrle 2 IT8XXX2_ALT_FUNC_1>;
+		bias-pull-up;
+	};
+	i3c2_data_gpe3_pull: i3c2_data_gpe3_pull {
+		pinmuxs = <&pinctrle 3 IT8XXX2_ALT_FUNC_1>;
+		bias-pull-up;
+	};
+	i3c3_clk_gpf0_pull: i3c3_clk_gpf0_pull {
+		pinmuxs = <&pinctrlf 0 IT8XXX2_ALT_FUNC_1>;
+		bias-pull-up;
+	};
+	i3c3_data_gpf1_pull: i3c3_data_gpf1_pull {
+		pinmuxs = <&pinctrlf 1 IT8XXX2_ALT_FUNC_1>;
+		bias-pull-up;
+	};
+
 	/* Keyboard alternate function */
 	kso0_gpk0_default: kso0_gpk0_default {
 		pinmuxs = <&pinctrlk 0 IT8XXX2_ALT_FUNC_1>;
