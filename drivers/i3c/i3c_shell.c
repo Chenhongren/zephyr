@@ -5,6 +5,7 @@
  */
 
 #include <zephyr/drivers/i3c.h>
+#include <zephyr/drivers/i3c/target_device.h>
 #include <zephyr/shell/shell.h>
 #include <stdlib.h>
 #include <string.h>
@@ -387,6 +388,32 @@ static int i3c_write_from_buffer(const struct shell *sh, char *s_dev_name, char 
 		return -ENODEV;
 	}
 
+	if (data_length == 0) {
+		uint8_t *auto_gen_buf;
+		uint16_t length = strtol(s_reg_addr, NULL, 16);
+
+		auto_gen_buf = malloc(length * sizeof(uint8_t));
+		if (auto_gen_buf == NULL) {
+			shell_error(sh, "failed to allocate buffer");
+			return -ENOMEM;
+		}
+
+		for (i = 0; i < length; i++) {
+			auto_gen_buf[i] = i;
+		}
+
+		ret = i3c_write(desc, auto_gen_buf, length);
+		if (ret < 0) {
+			shell_error(sh, "Failed to write to device: %s", tdev->name);
+			return -EIO;
+		}
+
+		if (auto_gen_buf) {
+			free(auto_gen_buf);
+		}
+		return 0;
+	}
+
 	reg_addr = strtol(s_reg_addr, NULL, 16);
 
 	reg_addr_bytes = get_bytes_count_for_hex(s_reg_addr);
@@ -465,6 +492,67 @@ static int i3c_read_to_buffer(const struct shell *sh, char *s_dev_name, char *s_
 	}
 
 	return 0;
+}
+
+static int i3c_only_read_to_buffer(const struct shell *sh, char *s_dev_name, char *s_tdev_name,
+				   uint8_t *buf, uint32_t buf_length)
+{
+	const struct device *dev, *tdev;
+	struct i3c_device_desc *desc;
+	int ret;
+
+	dev = shell_device_get_binding(s_dev_name);
+	if (!dev) {
+		shell_error(sh, "I3C: Device driver %s not found.", s_dev_name);
+		return -ENODEV;
+	}
+	tdev = shell_device_get_binding(s_tdev_name);
+	if (!tdev) {
+		shell_error(sh, "I3C: Device driver %s not found.", s_dev_name);
+		return -ENODEV;
+	}
+	desc = get_i3c_attached_desc_from_dev_name(dev, tdev->name);
+	if (!desc) {
+		shell_error(sh, "I3C: Device %s not attached to bus.", tdev->name);
+		return -ENODEV;
+	}
+
+	ret = i3c_read(desc, buf, buf_length);
+	if (ret < 0) {
+		shell_error(sh, "Failed to read from device: %s", tdev->name);
+		return -EIO;
+	}
+
+	return 0;
+}
+
+/* i3c only_read_byte <device> <target> [<numbytes>] */
+static int cmd_i3c_only_read(const struct shell *sh, size_t argc, char **argv)
+{
+	uint8_t buf[1024];
+	int num_bytes;
+	int ret;
+
+	if (argc > 3) {
+		num_bytes = strtol(argv[3], NULL, 16);
+		if (num_bytes > 512) {
+			num_bytes = 512;
+		}
+	} else {
+		num_bytes = MAX_I3C_BYTES;
+	}
+
+	ret = i3c_only_read_to_buffer(sh, argv[ARGV_DEV], argv[ARGV_TDEV], buf, num_bytes);
+
+	if (ret == 0) {
+		if (num_bytes <= 64) {
+			LOG_HEXDUMP_INF(buf, num_bytes, "only_read: ");
+		} else {
+			shell_print(sh, "only read %d bytes", num_bytes);
+		}
+	}
+
+	return ret;
 }
 
 /* i3c read_byte <device> <target> <reg_addr> */
@@ -1979,6 +2067,58 @@ static int cmd_i3c_i2c_scan(const struct shell *sh, size_t argc, char **argv)
 	return 0;
 }
 
+/* i3c tgt_tx_write <device> [<byte1>, ...] */
+static int cmd_i3c_target_tx_write(const struct shell *sh, size_t argc, char **argv)
+{
+	const struct device *dev;
+	const uint16_t buf_size = 4096;
+	uint8_t *buf;
+	uint16_t n_bytes;
+	int hdr_mode = 0;
+	int ret = 0;
+
+	dev = shell_device_get_binding(argv[ARGV_DEV]);
+	if (!dev) {
+		shell_error(sh, "I3C: Device driver %s not found.", argv[ARGV_DEV]);
+		return -ENODEV;
+	}
+
+	buf = malloc(buf_size * sizeof(uint8_t));
+	if (buf == NULL) {
+		shell_error(sh, "failed to allocate buffer");
+		return -ENOMEM;
+	}
+
+	if ((argc - ARGV_TDEV) == 1) {
+		n_bytes = (uint16_t)strtol(argv[ARGV_TDEV], NULL, 16);
+		if (n_bytes > buf_size) {
+			shell_error(sh, "I3C: Unable to prepare %d bytes tx data", n_bytes);
+			return -ENOMEM;
+		}
+		for (int i = 0; i < n_bytes; i++) {
+			buf[i] = i;
+		}
+	} else {
+		for (int i = 0; i < argc - ARGV_TDEV; i++) {
+			buf[i] = (uint8_t)strtol(argv[i + ARGV_TDEV], NULL, 16);
+		}
+		n_bytes = argc - ARGV_TDEV;
+	}
+
+	ret = i3c_target_tx_write(dev, buf, n_bytes, hdr_mode);
+	if (ret < 0) {
+		shell_error(sh, "I3C: Unable to set %s tx fifo, ret %d", argv[ARGV_DEV], ret);
+		return ret;
+	}
+
+	shell_print(sh, "I3C: Set %d bytes to target tx fifo", ret);
+
+	if (buf) {
+		free(buf);
+	}
+	return 0;
+}
+
 #ifdef CONFIG_I3C_USE_IBI
 /* i3c ibi hj_response <device> <"ack"/"nack"> */
 static int cmd_i3c_ibi_hj_response(const struct shell *sh, size_t argc, char **argv)
@@ -2417,6 +2557,10 @@ SHELL_STATIC_SUBCMD_SET_CREATE(
 		      "Recover I3C bus\n"
 		      "Usage: recover <device>",
 		      cmd_i3c_recover, 2, 0),
+	SHELL_CMD_ARG(only_read, &dsub_i3c_device_attached_name,
+		      "Only read bytes from an I3C device\n"
+		      "Usage: read <device> <target> [<bytes>]",
+		      cmd_i3c_only_read, 3, 1),
 	SHELL_CMD_ARG(read, &dsub_i3c_device_attached_name,
 		      "Read bytes from an I3C device\n"
 		      "Usage: read <device> <target> <reg> [<bytes>]",
@@ -2457,6 +2601,10 @@ SHELL_STATIC_SUBCMD_SET_CREATE(
 		      "Scan I2C devices\n"
 		      "Usage: i2c_scan <device>",
 		      cmd_i3c_i2c_scan, 2, 0),
+	SHELL_CMD_ARG(tgt_tx_write, &dsub_i3c_device_name,
+		      "set target tx fifo\n"
+		      "Usage: tgt_tx_write <device> [<byte1>, ...]",
+		      cmd_i3c_target_tx_write, 2, MAX_I3C_BYTES),
 	SHELL_CMD_ARG(ccc, &sub_i3c_ccc_cmds,
 		      "Send I3C CCC\n"
 		      "Usage: ccc <sub cmd>",
