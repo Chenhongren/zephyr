@@ -1,0 +1,81 @@
+/*
+ * Copyright (c) 2025 ITE Corporation. All Rights Reserved.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+&i3c0 {
+	status = "okay";
+	pinctrl-0 = <&i3c0_clk_gpj3_default
+		     &i3c0_data_gpj4_default>;
+	pinctrl-names = "default";
+	i3c-scl-hz = <6000000>;
+	i3c-od-scl-hz = <400000>;
+	i2c-scl-hz = <400000>;
+	//i3c-scl-hddat = <1>;
+	i2c-scl-hddat = <2>;
+
+	i3c_dummy@18000005fa12345678 {
+		compatible = "ite,i3c-ctrl-dummy";
+		reg = <0x18 0x05fa 0x12345678>;
+		label = "i3c_dummy_1";
+		supports-setaasa;
+		status = "okay"; //disable for i2c private test
+	};
+	i3c_dummy@19000005fa00010000 {
+		compatible = "ite,i3c-ctrl-dummy";
+		reg = <0x19 0x05fa 0x00010000>;
+		label = "i3c_dummy_2";
+		supports-setaasa;
+		status = "okay"; //disable for i2c private test
+	};
+	i2c_dummy@200000000000000050 {
+		compatible = "ite,i3c-ctrl-dummy";
+		reg = <0x20 0x0000 0x00000050>;
+		label = "i2c_dummy";
+		status = "disabled";
+	};
+};
+
+&i3c1 {
+	status = "okay";
+	pinctrl-0 = <
+		     &i3c1_clk_gpj5_default
+		     &i3c1_data_gpe1_default>;
+	pinctrl-names = "default";
+	i3c-scl-hz = <2670000>; // 2.67MHz
+	i3c-od-scl-hz = <650000>; // 0.65MHz
+	i2c-scl-hz = <400000>;
+	i3c-pp-duty-cycle = <89>;
+	i3c-scl-tcas = <4>;
+	i3c-scl-tcbs = <4>;
+	i3c-scl-tcasr = <4>;
+	i3c-scl-tcbsr = <4>;
+
+	/* Frequency 400KHz */
+	//i3c-od-scl-lo-period-ns = <1250>;
+	//i3c-pp-scl-hi-period-ns = <1250>;
+	//i3c-pp-scl-lo-period-ns = <1250>;
+	//i3c-clk-after-start-ns = <1250>;
+	//i3c-clk-before-stop-ns = <1250>;
+	//i3c-clk-after-sr-ns = <1250>;
+	//i3c-clk-before-sr-ns = <1250>;
+
+	/* Frequency 1MHz */
+	//i3c-od-scl-lo-period-ns = <500>;
+	//i3c-pp-scl-hi-period-ns = <500>;
+	//i3c-pp-scl-lo-period-ns = <500>;
+	//i3c-clk-after-start-ns = <500>;
+	//i3c-clk-before-stop-ns = <500>;
+	//i3c-clk-after-sr-ns = <500>;
+	//i3c-clk-before-sr-ns = <500>;
+
+	lps22df@000000020800b4900b {
+		//compatible = "st,lps22df";
+		compatible = "ite,i3c-ctrl-dummy";
+		reg = <0x00 0x0208 0x00b4900b>;
+		label = "i3c_sensor_2";
+
+		status = "disabled";
+	};
+};
