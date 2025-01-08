@@ -1,0 +1,39 @@
+# Copyright (c) 2025 ITE Corporation.
+# SPDX-License-Identifier: Apache-2.0
+
+config ITE_I3C_SAMPLE
+	bool
+	depends on DT_HAS_ITE_IT51XXX_I3CM_ENABLED || DT_HAS_ITE_IT51XXX_I3CS_ENABLED
+	default y
+	help
+	  Enable the ite i3c sample driver, including tgt mqueue and ctrl dummy device.
+
+if ITE_I3C_SAMPLE
+
+config I3C_TGT_MQUEUE
+	bool "I3C target message queue driver"
+	depends on DT_HAS_ITE_I3C_TGT_MQUEUE_ENABLED
+	default y if I3CS_IT51XXX
+
+config I3C_TGT_MQUEUE_STACK_SIZE
+	int "the stack size of tgt mqueue thread"
+	depends on I3C_TGT_MQUEUE
+	default 1024
+
+config I3C_TGT_MQUEUE_THREAD_PRIORITY
+	int "the priority of tgt mqueue thread"
+	depends on I3C_TGT_MQUEUE
+	default 8
+
+config I3C_TGT_MQUEUE_EVENT_COUNT
+	int "I3C tgt mqueue event count"
+	depends on I3C_TGT_MQUEUE
+	range 4 16
+	default 4
+
+config I3C_CTRL_DUMMY
+	bool "I3C controller dummy driver"
+	depends on DT_HAS_ITE_I3C_CTRL_DUMMY_ENABLED
+	default y if I3CM_IT51XXX
+
+endif # ITE_I3C_SAMPLE
