@@ -1,0 +1,10 @@
+# Copyright (c) 2025 ITE Corporation.
+# SPDX-License-Identifier: Apache-2.0
+
+config ITE_2EVB_TEST
+	bool "enable 2 EVBs i3c test"
+	default n
+	help
+	  enable 2 EVBs i3c test.
+
+source "Kconfig.zephyr"
