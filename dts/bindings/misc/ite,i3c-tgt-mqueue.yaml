@@ -1,0 +1,12 @@
+# Copyright (c) 2025 ITE Corporation. All Rights Reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+description: I3C target message queue driver
+
+compatible: "ite,i3c-tgt-mqueue"
+
+include: [base.yaml]
+      
+properties:
+  label:
+    type: string
