@@ -170,7 +170,7 @@ struct it51xxx_i3cm_config {
 	const uint8_t io_channel;
 
 	struct {
-		uint8_t i3c_pp_duty_cycle;
+		uint32_t i3c_pp_duty_cycle;
 		uint32_t i3c_od_scl_hz;
 		uint32_t i3c_scl_hddat;
 		uint32_t i3c_scl_tcas;
@@ -331,8 +331,8 @@ static int it51xxx_i3cm_init_clock(const struct device *dev)
 	uint32_t pp_freq, od_freq;
 	uint32_t odlow_ns, odhigh_ns, pplow_ns, pphigh_ns;
 	uint16_t pphigh, pplow, odhigh, odlow;
-	uint8_t pp_duty_cycle =
-		(cfg->clocks.i3c_pp_duty_cycle > 100) ? 100 : cfg->clocks.i3c_pp_duty_cycle;
+	int pp_duty_cycle =
+		(cfg->clocks.i3c_pp_duty_cycle > 10000) ? 10000 : cfg->clocks.i3c_pp_duty_cycle;
 	uint8_t hddat = (cfg->clocks.i3c_scl_hddat > 63) ? 63 : cfg->clocks.i3c_scl_hddat;
 	uint8_t tcas = (cfg->clocks.i3c_scl_tcas > 0xff) ? 0xff : cfg->clocks.i3c_scl_tcas;
 	uint8_t tcbs = (cfg->clocks.i3c_scl_tcbs > 0xff) ? 0xff : cfg->clocks.i3c_scl_tcbs;
@@ -354,7 +354,7 @@ static int it51xxx_i3cm_init_clock(const struct device *dev)
 	 * pplow_ns = (1 / pp_freq) - pphigh_ns
 	 * odlow_ns = (1 / od_freq) - odhigh_ns
 	 */
-	pphigh_ns = (NSEC_PER_SEC / pp_freq) * pp_duty_cycle / 100;
+	pphigh_ns = (NSEC_PER_SEC / pp_freq) * pp_duty_cycle / 10000;
 	pplow_ns = (NSEC_PER_SEC / pp_freq) - pphigh_ns;
 	odhigh_ns = pphigh_ns;
 	odlow_ns = (NSEC_PER_SEC / od_freq) - odhigh_ns;
@@ -960,11 +960,11 @@ static int it51xxx_i3cm_init(const struct device *dev)
 	int ret;
 
 	/* pull-up scl and sda pins to prevent unexpected jitter when enabling i3cm engine */
-	ret = pinctrl_apply_state(cfg->pcfg, PINCTRL_STATE_PULL);
-	if (ret != 0) {
-		LOG_DEV_ERR(dev, "failed to apply pull pinctrl, ret %d", ret);
-		return ret;
-	}
+	// ret = pinctrl_apply_state(cfg->pcfg, PINCTRL_STATE_PULL);
+	// if (ret != 0) {
+	// 	LOG_DEV_ERR(dev, "failed to apply pull pinctrl, ret %d", ret);
+	// 	return ret;
+	// }
 
 	ctrl_config->is_secondary = false;
 	ctrl_config->supported_hdr = 0x0;

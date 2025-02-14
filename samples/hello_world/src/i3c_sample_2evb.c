@@ -32,25 +32,34 @@ int main(void)
 
 	LOG_INF("2 EVBs: controller side...");
 #if DT_NODE_HAS_STATUS(DT_NODELABEL(i3c0), okay)
-	const struct device *controll_dev_1, *dummy_dev1, *dummy_dev2;
+	const struct device *controll_dev_1, *dummy_dev1, *dummy_dev2, *st_sensor_dev;
 	controll_dev_1 = device_get_binding("i3c@f03c00");
 	if (!controll_dev_1) {
 		LOG_ERR("failed to get i3c device");
 		return -ENODEV;
 	}
 
-	dummy_dev1 = device_get_binding("i3c_dummy_1");
-	if (!dummy_dev1) {
-		LOG_ERR("failed to get i3c_dummy_1 dev");
+	st_sensor_dev = device_get_binding("i3c_sensor");
+	if (!st_sensor_dev) {
+		LOG_ERR("failed to get i3c_sensor dev");
 		return -ENODEV;
 	}
 
-	dummy_dev2 = device_get_binding("i3c_dummy_2");
-	if (!dummy_dev2) {
-		LOG_ERR("failed to get i3c_dummy_2 dev");
-		return -ENODEV;
-	}
+	// dummy_dev1 = device_get_binding("i3c_dummy_1");
+	// if (!dummy_dev1) {
+	// 	LOG_ERR("failed to get i3c_dummy_1 dev");
+	// 	return -ENODEV;
+	// }
 
+	// dummy_dev2 = device_get_binding("i3c_dummy_2");
+	// if (!dummy_dev2) {
+	// 	LOG_ERR("failed to get i3c_dummy_2 dev");
+	// 	return -ENODEV;
+	// }
+
+	// cmd_i3c_ccc_rstdaa(controll_dev_1);
+	// i3c_do_daa(controll_dev_1);
+	// cmd_i3c_ccc_getbcr(controll_dev_1,st_sensor_dev);
 #if TEST_BROADCAST_CCC
 	cmd_i3c_ccc_rstdaa(controll_dev_1);
 	i3c_do_daa(controll_dev_1);
