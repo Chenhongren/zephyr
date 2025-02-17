@@ -1,0 +1,50 @@
+/*
+ * Copyright (c) 2025 ITE Corporation. All Rights Reserved.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ */
+#include <zephyr/dt-bindings/sensor/lps2xdf.h>
+
+&i3c0 {
+	status = "okay";
+	pinctrl-0 = <&i3c0_clk_gpj3_default
+		     &i3c0_data_gpj4_default>;
+	pinctrl-names = "default";
+	i3c-scl-hz = <2530000>; // 2.53MHz
+	i3c-od-scl-hz = <650000>; // 0.65MHz
+	i2c-scl-hz = <400000>;
+	i3c-pp-duty-cycle = <84>;
+	i3c-scl-tcas = <5>;
+	i3c-scl-tcbs = <5>;
+	i3c-scl-tcasr = <5>;
+	i3c-scl-tcbsr = <5>;
+
+	/* SD0 should be connected to gnd */
+	lps22df_0@5c0000020800b4100b {
+		compatible = "ite,i3c-ctrl-dummy";
+		reg = <0x5c 0x0208 0x00b4100b>;
+		label = "ctrl_dummy_sensor";
+		status = "okay";
+	};
+
+	/* SD0 should be connected to vdd */
+	lps22df_1@5d0000020800b4900b {
+		compatible = "st,lps22df";
+		reg = <0x5d 0x0208 0x00b4900b>;
+		label = "st_lps22df";
+		odr = <LPS2xDF_DT_ODR_10HZ>;
+		lpf = <LPS2xDF_DT_LP_FILTER_ODR_4>;
+		avg = <LPS2xDF_DT_AVG_128_SAMPLES>;
+		drdy-gpios = <&gpioe 0 0>;
+		drdy-pulsed;
+		status = "okay";
+	};
+};
+
+&i3c1 {
+	status = "disabled";
+	pinctrl-0 = <
+		     &i3c1_clk_gpj5_default
+		     &i3c1_data_gpe1_default>;
+	pinctrl-names = "default";
+};
