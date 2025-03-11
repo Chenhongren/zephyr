@@ -4,6 +4,21 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+&pinctrl {
+	i3c2_clk_gpe2_default: i3c2_clk_gpe2_default {
+		gpio-voltage = "1v8";
+	};
+	i3c2_data_gpe3_default: i3c2_data_gpe3_default {
+		gpio-voltage = "1v8";
+	};
+	i3c3_clk_gpf0_default: i3c3_clk_gpf0_default {
+		gpio-voltage = "1v8";
+	};
+	i3c3_data_gpf1_default: i3c3_data_gpf1_default {
+		gpio-voltage = "1v8";
+	};
+};
+
 &i3c2 {
 	status = "okay";
 
