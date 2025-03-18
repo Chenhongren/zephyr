@@ -15,6 +15,7 @@
 	pid-random-value = <0x12345678>;
 	bcr = <0xf>; // With ibi payload
 	dcr = <0x1>;
+	vendor-info-fields = <0xAA>;
 
 	tgt_mqueue@18 {
 		compatible = "ite,i3c-tgt-mqueue";
@@ -31,6 +32,7 @@
 		     &i3c3_clk_gpf0_default
 		     &i3c3_data_gpf1_default>;
 	pinctrl-names = "default";
+	vendor-info-fields = <0xAA>;
 	static-address = <0x19>;
 	// bcr = <0xb>; // Without ibi payload
 	bcr = <0x9>; // ibi is not capable

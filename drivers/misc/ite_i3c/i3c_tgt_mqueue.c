@@ -12,6 +12,7 @@
 LOG_MODULE_REGISTER(tgt_mqueue, LOG_LEVEL_DBG);
 
 struct i3c_tgt_mqueue_config {
+	uint8_t address;
 };
 
 struct i3c_tgt_mqueue_data {
@@ -19,6 +20,8 @@ struct i3c_tgt_mqueue_data {
 
 	struct i3c_target_config target_config;
 	struct k_work tgt_stop_work;
+
+	struct k_work_delayable ibi_tir_work;
 
 	struct {
 		struct {
@@ -120,6 +123,20 @@ static void i3c_target_work(struct k_work *work)
 	}
 }
 
+static void tgt_ibi_tir_work(struct k_work *work)
+{
+	struct k_work_delayable *dwork = k_work_delayable_from_work(work);
+	struct i3c_tgt_mqueue_data *data =
+		CONTAINER_OF(dwork, struct i3c_tgt_mqueue_data, ibi_tir_work);
+	uint8_t tir_data[1] = {0x01};
+
+	if (data->target_config.address != 0) {
+		raise_ibi_tir(data->controller, tir_data, sizeof(tir_data));
+	}
+
+	k_work_reschedule(&data->ibi_tir_work, K_MSEC(5));
+}
+
 static int i3c_tgt_mq_write_requested_cb(struct i3c_target_config *config)
 {
 	LOG_INF("%s ITE Debug %d", __func__, __LINE__);
@@ -190,10 +207,12 @@ static const struct i3c_target_callbacks i3c_target_loopback_callbacks = {
 
 static int i3c_tgt_mqueue_init(const struct device *dev)
 {
+	const struct i3c_tgt_mqueue_config *config = dev->config;
 	struct i3c_tgt_mqueue_data *data = dev->data;
 	int ret;
 
 	data->target_config.callbacks = &i3c_target_loopback_callbacks;
+	// data->target_config.address = config->address;
 
 	ret = i3c_target_register(data->controller, &data->target_config);
 	if (ret) {
@@ -203,16 +222,22 @@ static int i3c_tgt_mqueue_init(const struct device *dev)
 
 	k_work_init(&data->tgt_stop_work, i3c_target_work);
 
-	LOG_INF("registered %s on %s controller", dev->name, data->controller->name);
+	LOG_INF("registered %s(0x%x) on %s controller", dev->name, config->address,
+		data->controller->name);
 
 	raise_ibi_hj(data->controller);
 
 	prepare_tx_fifo(data);
+
+	k_work_init_delayable(&data->ibi_tir_work, tgt_ibi_tir_work);
+	k_work_reschedule(&data->ibi_tir_work, K_MSEC(5));
 	return 0;
 }
 
 #define I3C_TARGET_MQUEUE_INIT(n)                                                                  \
-	static const struct i3c_tgt_mqueue_config i3c_tgt_mqueue_config_##n = {};                  \
+	static const struct i3c_tgt_mqueue_config i3c_tgt_mqueue_config_##n = {                    \
+		.address = DT_INST_REG_ADDR(n),                                                    \
+	};                                                                                         \
                                                                                                    \
 	static struct i3c_tgt_mqueue_data i3c_tgt_mqueue_data_##n = {                              \
 		.controller = DEVICE_DT_GET(DT_INST_BUS(n)),                                       \

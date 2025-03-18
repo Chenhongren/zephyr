@@ -13,3 +13,6 @@ include:
 properties:
   label:
     type: string
+
+  debug-gpios:
+    type: phandle-array

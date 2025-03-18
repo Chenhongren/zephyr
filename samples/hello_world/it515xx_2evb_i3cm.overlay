@@ -14,11 +14,15 @@
 	i2c-scl-hz = <400000>;
 	//i3c-scl-hddat = <1>;
 	i2c-scl-hddat = <2>;
+	debug-gpios = <&gpioe 0 0>;
+	debug-ibi-gpios = <&gpioe 1 0>;
+	debug-end-gpios = <&gpioe 3 0>;
 
 	i3c_dummy@18000005fa12345678 {
 		compatible = "ite,i3c-ctrl-dummy";
 		reg = <0x18 0x05fa 0x12345678>;
 		label = "i3c_dummy_1";
+		debug-gpios = <&gpioe 2 0>;
 		supports-setaasa;
 		status = "okay"; //disable for i2c private test
 	};
@@ -26,6 +30,7 @@
 		compatible = "ite,i3c-ctrl-dummy";
 		reg = <0x19 0x05fa 0x00010000>;
 		label = "i3c_dummy_2";
+		debug-gpios = <&gpioe 4 0>;
 		supports-setaasa;
 		status = "okay"; //disable for i2c private test
 	};
@@ -38,7 +43,7 @@
 };
 
 &i3c1 {
-	status = "okay";
+	status = "disabled";
 	pinctrl-0 = <
 		     &i3c1_clk_gpj5_default
 		     &i3c1_data_gpe1_default>;

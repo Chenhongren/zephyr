@@ -8,6 +8,7 @@
 
 #include <zephyr/drivers/i3c.h>
 
+#include <zephyr/drivers/gpio.h>
 #include <zephyr/logging/log.h>
 #define LOG_MODULE_NAME i3c_ctrl_dummy
 LOG_MODULE_REGISTER(LOG_MODULE_NAME, LOG_LEVEL_DBG);
@@ -24,6 +25,7 @@ enum opcode_table {
 struct i3c_ctrl_dummy_config {
 	const struct device *bus;
 	const uint64_t pid;
+	struct gpio_dt_spec debug_gpio;
 };
 
 struct i3c_ctrl_dummy_data {
@@ -37,14 +39,17 @@ struct i3c_ctrl_dummy_data {
 	bool is_present;
 };
 
+int cnt = 0;
+
 static void i3c_status_check_work(struct k_work *work)
 {
 	struct k_work_delayable *dwork = k_work_delayable_from_work(work);
 	struct i3c_ctrl_dummy_data *data =
 		CONTAINER_OF(dwork, struct i3c_ctrl_dummy_data, status_check_work);
 	const struct device *dev = data->dev;
+	const struct i3c_ctrl_dummy_config *config = dev->config;
 	union i3c_ccc_getstatus status;
-	int ret;
+	int ret = 0;
 
 	if (!data->is_present) {
 		if (data->desc->dynamic_addr) {
@@ -55,13 +60,14 @@ static void i3c_status_check_work(struct k_work *work)
 		}
 	}
 
+	gpio_pin_configure_dt(&config->debug_gpio, GPIO_OUTPUT_LOW);
 	/* in accordance with the i3c spec,
 	 * If the target detaches or loses power from the I3C Bus, the controller may not be aware
 	 * of it. To detect this condition, the controller sends a GETSTATUS CCC.
 	 */
 	ret = i3c_ccc_do_getstatus(data->desc, &status, GETSTATUS_FORMAT_1,
 				   GETSTATUS_FORMAT_2_INVALID);
-	if (ret < 0) {
+	if (ret < 0 && ret != -EBUSY) {
 		if (data->is_present) {
 			/* NOTE: do NOT disable ibi, or the hot-join event requested by the target
 			 * will fail */
@@ -71,9 +77,20 @@ static void i3c_status_check_work(struct k_work *work)
 			data->is_present = false;
 		}
 	}
+	if (ret == 0) {
+		if (FIELD_GET(GENMASK(15, 8), status.fmt1.status) != 0xAA) {
+			gpio_pin_configure_dt(&config->debug_gpio, GPIO_OUTPUT_HIGH);
+			LOG_ERR("GETSTATUS (0x%x) is error", status.fmt1.status);
+		}
+	}
 
 out:
-	k_work_reschedule(&data->status_check_work, K_MSEC(50));
+	if (ret != -234) {
+		cnt++;
+		k_work_reschedule(&data->status_check_work, K_MSEC(5));
+	} else {
+		LOG_ERR("ITE Debug stop send GETSTATUS CCC");
+	}
 }
 
 static void i3c_ctrl_dummy_work(struct k_work *work)
@@ -97,7 +114,10 @@ static int i3c_ctrl_dummy_ibi_cb(struct i3c_device_desc *target, struct i3c_ibi_
 		LOG_INF("received ibi without payload");
 	} else {
 		if (payload->payload_len) {
-			LOG_HEXDUMP_INF(payload->payload, payload->payload_len, "IBI payload:");
+			// LOG_HEXDUMP_INF(payload->payload, payload->payload_len, "IBI payload:");
+			if (payload->payload[0] != 0x0 && payload->payload[0] != 0x01) {
+				LOG_ERR("IBI payload(0x%x) is error", payload->payload[0]);
+			}
 
 			if (FIELD_GET(IBI_MDB_GROUP_MASK, payload->payload[0]) ==
 			    IBI_MDB_GROUP_PENDING_READ_NOTI) {
@@ -121,14 +141,16 @@ static int i3c_ctrl_dummy_init(const struct device *dev)
 	LOG_INF("registered %s(pid %012llx) on %s controller", dev->name, config->pid,
 		config->bus->name);
 
+	gpio_pin_configure_dt(&config->debug_gpio, GPIO_OUTPUT_LOW);
+
 	data->dev = dev;
 	data->desc = i3c_device_find(config->bus, &i3c_id);
 	data->desc->ibi_cb = i3c_ctrl_dummy_ibi_cb;
-	if (i3c_device_is_ibi_capable(data->desc)) {
-		if (!i3c_ibi_enable(data->desc)) {
-			LOG_INF("enabled ibi for device %s", dev->name);
-		}
-	}
+	// if (i3c_device_is_ibi_capable(data->desc)) {
+	// 	if (!i3c_ibi_enable(data->desc)) {
+	// 		LOG_INF("enabled ibi for device %s", dev->name);
+	// 	}
+	// }
 
 	k_work_init(&data->work, i3c_ctrl_dummy_work);
 
@@ -142,6 +164,7 @@ static int i3c_ctrl_dummy_init(const struct device *dev)
 		.bus = DEVICE_DT_GET(DT_INST_BUS(n)),                                              \
 		.pid = ((uint64_t)DT_PROP_BY_IDX(DT_DRV_INST(n), reg, 1) << 32) |                  \
 		       DT_PROP_BY_IDX(DT_DRV_INST(n), reg, 2),                                     \
+		.debug_gpio = GPIO_DT_SPEC_INST_GET(n, debug_gpios),                               \
 	};                                                                                         \
                                                                                                    \
 	static struct i3c_ctrl_dummy_data i3c_ctrl_dummy_data_##n;                                 \
