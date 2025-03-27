@@ -66,7 +66,7 @@ static inline int clock_control_it51xxx_on(const struct device *dev,
 
 	/* Enable the clock of this module */
 	sys_write8(sys_read8(config->ecpm_base + clk_cfg->ctrl) & ~(clk_cfg->bits),
-		   config->ecpm_base);
+		   config->ecpm_base + clk_cfg->ctrl);
 
 	return 0;
 }
@@ -81,7 +81,7 @@ static inline int clock_control_it51xxx_off(const struct device *dev,
 	/* CGCTRL3R, bit 6, must always write a 1. */
 	tmp_mask |= (clk_cfg->ctrl == IT51XXX_ECPM_CGCTRL3R_OFF) ? 0x40 : 0x00;
 	sys_write8(sys_read8(config->ecpm_base + clk_cfg->ctrl) | clk_cfg->bits | tmp_mask,
-		   config->ecpm_base);
+		   config->ecpm_base + clk_cfg->ctrl);
 
 	return 0;
 }
