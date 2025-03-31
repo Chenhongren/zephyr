@@ -9,8 +9,6 @@
 
 #include <zephyr/sys/util.h>
 
-#define EC_FREQ KHZ(9200)
-
 #ifdef _ASMLANGUAGE
 #define ECREG(x) x
 #else

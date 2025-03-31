@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+#include <freq.h>
 #include <ite/it51xxx-wuc-map.dtsi>
 #include <mem.h>
 #include <zephyr/dt-bindings/clock/ite-it51xxx-clock.h>
@@ -1077,6 +1078,7 @@
 			compatible = "ite,it51xxx-ecpm";
 			reg = <0x00f01e00 0x0a>;
 			pll-frequency = <PLL_48000_KHZ>;
+			ec-frequency = <DT_FREQ_K(9200)>;
 			#clock-cells = <2>;
 		};
 

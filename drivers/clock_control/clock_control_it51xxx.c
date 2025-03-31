@@ -55,6 +55,7 @@ struct clock_control_it51xxx_data {
 struct clock_control_it51xxx_config {
 	mm_reg_t ecpm_base;
 	int pll_freq;
+	int ec_freq;
 };
 
 /* Clock controller local functions */
@@ -86,27 +87,49 @@ static inline int clock_control_it51xxx_off(const struct device *dev,
 	return 0;
 }
 
+static inline int get_pll_frequency(const struct device *dev)
+{
+	const struct clock_control_it51xxx_config *const config = dev->config;
+	int reg_val;
+	int freq_pll;
+
+	reg_val = sys_read8(config->ecpm_base + ECPM_PLLFREQR);
+	switch (FIELD_GET(ECPM_PLLFREQ_MASK, reg_val)) {
+	case 0x01:
+		freq_pll = KHZ(18400);
+		break;
+	case 0x03:
+		freq_pll = KHZ(32300);
+		break;
+	case 0x07:
+		freq_pll = KHZ(64500);
+		break;
+	case 0x08:
+		freq_pll = KHZ(96000);
+		break;
+	case 0x09:
+		freq_pll = KHZ(48000);
+		break;
+	default:
+		return -ERANGE;
+	}
+	return freq_pll;
+}
+
 static int clock_control_it51xxx_get_rate(const struct device *dev,
 					  clock_control_subsys_t sub_system, uint32_t *rate)
 {
 	const struct clock_control_it51xxx_config *const config = dev->config;
-	int reg_val = sys_read8(config->ecpm_base + ECPM_PLLFREQR) & ECPM_PLLFREQ_MASK;
 
-	switch (reg_val) {
-	case 0x01:
-		*rate = KHZ(18400);
+	switch ((int)sub_system) {
+	case IT51XXX_PLL_MODULE:
+		*rate = get_pll_frequency(dev);
 		break;
-	case 0x03:
-		*rate = KHZ(32300);
-		break;
-	case 0x07:
-		*rate = KHZ(64500);
-		break;
-	case 0x09:
-		*rate = KHZ(48000);
+	case IT51XXX_EC_MODULE:
+		*rate = config->ec_freq;
 		break;
 	default:
-		return -ERANGE;
+		return -EINVAL;
 	}
 
 	return 0;
@@ -197,6 +220,7 @@ static struct clock_control_it51xxx_data clock_control_it51xxx_data = {
 static const struct clock_control_it51xxx_config clock_control_it51xxx_cfg = {
 	.ecpm_base = DT_INST_REG_ADDR(0),
 	.pll_freq = DT_INST_PROP(0, pll_frequency),
+	.ec_freq = DT_INST_PROP(0, ec_frequency),
 };
 
 DEVICE_DT_INST_DEFINE(0, clock_control_it51xxx_init, NULL, &clock_control_it51xxx_data,

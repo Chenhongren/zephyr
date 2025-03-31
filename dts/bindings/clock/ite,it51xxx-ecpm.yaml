@@ -25,6 +25,11 @@ properties:
       2 = PLL_64500_KHZ,
       3 = PLL_48000_KHZ,
 
+  ec-frequency:
+    type: int
+    required: true
+    description: EC frequency in Hz
+
   "#clock-cells":
     const: 2
 
