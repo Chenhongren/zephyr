@@ -13,6 +13,7 @@ LOG_MODULE_REGISTER(spi_it51xxx, CONFIG_SPI_LOG_LEVEL);
 #include <zephyr/drivers/clock_control.h>
 #include <zephyr/drivers/spi.h>
 #include <zephyr/drivers/pinctrl.h>
+#include <zephyr/dt-bindings/clock/ite-it51xxx-clock.h>
 #include <zephyr/pm/policy.h>
 #include <soc.h>
 
@@ -69,17 +70,28 @@ struct spi_it51xxx_data {
 static inline int spi_it51xxx_set_freq(const struct device *dev, const uint32_t frequency)
 {
 	const struct spi_it51xxx_config *cfg = dev->config;
-	uint32_t clk_pll;
+	uint32_t clk_pll, clk_ec;
 	uint8_t reg_val;
 	uint8_t divisor;
 	uint8_t freq_pll_div[8] = {2, 4, 6, 8, 10, 12, 14, 1};
 	uint8_t freq_ec_div[8] = {2, 4, 6, 8, 10, 12, 14, 16};
 	int ret;
 
-	ret = clock_control_get_rate(cfg->clk_dev, (clock_control_subsys_t)&cfg->clk_cfg, &clk_pll);
+	ret = clock_control_get_rate(cfg->clk_dev, (clock_control_subsys_t)IT51XXX_PLL_MODULE, &clk_pll);
 	if (ret) {
 		LOG_WRN("failed to get pll frequency %d", ret);
 		return ret;
+	}
+
+	ret = clock_control_get_rate(cfg->clk_dev, (clock_control_subsys_t)IT51XXX_EC_MODULE, &clk_ec);
+	if (ret) {
+		LOG_WRN("failed to get ec frequency %d", ret);
+		return ret;
+	}
+	static bool print = true;
+	if (print) {
+		print = false;
+		LOG_INF("ITE Debug pll frequency %d ec frequency %d", clk_pll, clk_ec);
 	}
 
 	for (uint8_t i = 0; i < ARRAY_SIZE(freq_pll_div); i++) {
@@ -95,13 +107,13 @@ static inline int spi_it51xxx_set_freq(const struct device *dev, const uint32_t 
 	}
 
 	for (uint8_t i = 0; i < ARRAY_SIZE(freq_ec_div); i++) {
-		if (frequency == (EC_FREQ / freq_ec_div[i])) {
+		if (frequency == (clk_ec / freq_ec_div[i])) {
 			/* select ec frequency as clock source */
 			sys_write8(sys_read8(cfg->base + SPI05_CHAIN_CTRL) &
 					   ~PLL_CLOCK_SOURCE_SELECTION,
 				   cfg->base + SPI05_CHAIN_CTRL);
 			divisor = i;
-			LOG_DBG("freq: ec %dHz, ssck %dHz", EC_FREQ, frequency);
+			LOG_DBG("freq: ec %dHz, ssck %dHz", clk_ec, frequency);
 			goto out;
 		}
 	}
