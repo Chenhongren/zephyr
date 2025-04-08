@@ -26,14 +26,14 @@
 		     &i3c2_clk_gpe2_default
 		     &i3c2_data_gpe3_default>;
 	pinctrl-names = "default";
-	static-address = <0x18>;
+	static-address = <0x21>;
 	pid-random-value = <0x12345678>;
 	bcr = <0xf>; // With ibi payload
 	dcr = <0x1>;
 
-	tgt_mqueue@18 {
+	tgt_mqueue@21 {
 		compatible = "ite,i3c-tgt-mqueue";
-		reg = <0x18>;
+		reg = <0x21>;
 		label = "tgt-mqueue";
 		status = "okay";
 	};

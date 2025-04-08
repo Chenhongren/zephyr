@@ -31,16 +31,18 @@
 
 	i3c_dummy@18000005fa12345678 {
 		compatible = "ite,i3c-ctrl-dummy";
-		reg = <0x18 0x05fa 0x12345678>;
+		reg = <0x21 0x05fa 0x12345678>;
 		label = "i3c_dummy_1";
-		supports-setaasa;
+		assigned-address = <0x28>;
+		//supports-setaasa;
 		status = "okay"; //disable for i2c private test
 	};
 	i3c_dummy@19000005fa00010000 {
 		compatible = "ite,i3c-ctrl-dummy";
 		reg = <0x19 0x05fa 0x00010000>;
+		assigned-address = <0x29>;
 		label = "i3c_dummy_2";
-		supports-setaasa;
+		//supports-setaasa;
 		status = "okay"; //disable for i2c private test
 	};
 	i2c_dummy@200000000000000050 {
