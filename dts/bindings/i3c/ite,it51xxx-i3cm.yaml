@@ -76,3 +76,12 @@ properties:
       i2c data hold time(0 by default). The time is calculated as:
       t_hddat = (i2c-scl-hddat + 1) * 20.8ns. The range of i3c-scl-hddat is
       [65535:0].
+
+  debug-gpios:
+    type: phandle-array
+
+  debug-ibi-gpios:
+    type: phandle-array
+
+  debug-end-gpios:
+    type: phandle-array

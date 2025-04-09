@@ -60,37 +60,55 @@ static void i3c_status_check_work(struct k_work *work)
 		}
 	}
 
-	gpio_pin_configure_dt(&config->debug_gpio, GPIO_OUTPUT_LOW);
-	/* in accordance with the i3c spec,
-	 * If the target detaches or loses power from the I3C Bus, the controller may not be aware
-	 * of it. To detect this condition, the controller sends a GETSTATUS CCC.
-	 */
-	ret = i3c_ccc_do_getstatus(data->desc, &status, GETSTATUS_FORMAT_1,
-				   GETSTATUS_FORMAT_2_INVALID);
-	if (ret < 0 && ret != -EBUSY) {
-		if (data->is_present) {
-			/* NOTE: do NOT disable ibi, or the hot-join event requested by the target
-			 * will fail */
-			LOG_INF("device %s is absent, recycle the dynamic address(0x%x)", dev->name,
-				data->desc->dynamic_addr);
-			data->desc->dynamic_addr = 0;
-			data->is_present = false;
+	if (config->pid == 0x05fa00010000) {
+		gpio_pin_configure_dt(&config->debug_gpio, GPIO_OUTPUT_LOW);
+		/* in accordance with the i3c spec,
+		 * If the target detaches or loses power from the I3C Bus, the controller may not be aware
+		 * of it. To detect this condition, the controller sends a GETSTATUS CCC.
+		 */
+		ret = i3c_ccc_do_getstatus(data->desc, &status, GETSTATUS_FORMAT_1,
+					   GETSTATUS_FORMAT_2_INVALID);
+		if (ret < 0 && ret != -EBUSY) {
+			if (data->is_present) {
+				/* NOTE: do NOT disable ibi, or the hot-join event requested by the target
+				 * will fail */
+				LOG_INF("device %s is absent, recycle the dynamic address(0x%x)", dev->name,
+					data->desc->dynamic_addr);
+				data->desc->dynamic_addr = 0;
+				data->is_present = false;
+			}
+		}
+		if (ret == 0) {
+			if (FIELD_GET(GENMASK(15, 8), status.fmt1.status) != 0xAA) {
+				gpio_pin_configure_dt(&config->debug_gpio, GPIO_OUTPUT_HIGH);
+				LOG_ERR("GETSTATUS (0x%x) is error", status.fmt1.status);
+			}
 		}
 	}
-	if (ret == 0) {
-		if (FIELD_GET(GENMASK(15, 8), status.fmt1.status) != 0xAA) {
-			gpio_pin_configure_dt(&config->debug_gpio, GPIO_OUTPUT_HIGH);
-			LOG_ERR("GETSTATUS (0x%x) is error", status.fmt1.status);
+
+	if (config->pid == 0x05fa12345678) {
+		uint8_t rx_buf[10];
+		ret = i3c_read(data->desc, rx_buf, sizeof(rx_buf));
+		if (ret < 0 && ret != -EBUSY) {
+			if (data->is_present) {
+				LOG_INF("device %s is absent, recycle the dynamic address(0x%x)", dev->name,
+					data->desc->dynamic_addr);
+				data->desc->dynamic_addr = 0;
+				data->is_present = false;
+			}
+		}
+		if (ret == 0) {
+			for (int i = 0; i < sizeof(rx_buf); i++) {
+				if (rx_buf[i] != i) {
+					LOG_HEXDUMP_ERR(rx_buf, sizeof(rx_buf), "private read is error:");
+					break;
+				}
+			}
 		}
 	}
 
 out:
-	if (ret != -234) {
-		cnt++;
-		k_work_reschedule(&data->status_check_work, K_MSEC(5));
-	} else {
-		LOG_ERR("ITE Debug stop send GETSTATUS CCC");
-	}
+	k_work_reschedule(&data->status_check_work, K_MSEC(5));
 }
 
 static void i3c_ctrl_dummy_work(struct k_work *work)

@@ -9,6 +9,9 @@
 #include <zephyr/logging/log.h>
 LOG_MODULE_REGISTER(i3cm_it51xxx, CONFIG_I3C_IT51XXX_LOG_LEVEL);
 
+/* TODO: REMOVE: for debugging purposes only */
+#include <zephyr/drivers/gpio.h>
+
 #include <zephyr/drivers/i3c.h>
 #include <zephyr/drivers/pinctrl.h>
 #include <zephyr/device.h>
@@ -183,6 +186,11 @@ struct it51xxx_i3cm_config {
 	mm_reg_t base;
 	uint8_t io_channel;
 	uint8_t irq_num;
+
+	/* TODO: REMOVE: for debugging purposes only */
+	struct gpio_dt_spec debug_gpio;
+	struct gpio_dt_spec debug_ibi_gpio;
+	struct gpio_dt_spec debug_end_gpio;
 
 	struct {
 		uint8_t i3c_pp_duty_cycle;
@@ -1206,6 +1214,9 @@ static int it51xxx_i3cm_init(const struct device *dev)
 			LOG_DEV_ERR(dev, "failed to init i3c bus, ret %d", ret);
 		}
 	}
+	gpio_pin_configure_dt(&cfg->debug_gpio, GPIO_OUTPUT_LOW);
+	gpio_pin_configure_dt(&cfg->debug_ibi_gpio, GPIO_OUTPUT_LOW);
+	gpio_pin_configure_dt(&cfg->debug_end_gpio, GPIO_OUTPUT_LOW);
 	return 0;
 }
 
@@ -1535,6 +1546,7 @@ static void it51xxx_i3cm_isr(const struct device *dev)
 		switch (data->msg_state) {
 		case IT51XXX_I3CM_MSG_ABORT:
 			LOG_DEV_INF(dev, "isr: transfer was aborted due to ibi transaction");
+			gpio_pin_configure_dt(&cfg->debug_gpio, GPIO_OUTPUT_HIGH);
 			data->transfer_is_aborted = true;
 			__fallthrough;
 		case IT51XXX_I3CM_MSG_IBI:
@@ -1577,6 +1589,7 @@ static void it51xxx_i3cm_isr(const struct device *dev)
 		}
 
 		data->msg_state = IT51XXX_I3CM_MSG_IDLE;
+		gpio_pin_configure_dt(&cfg->debug_gpio, GPIO_OUTPUT_LOW);
 		sys_write8(TARGET_NACK | TRANSFER_END, cfg->base + I3CM01_STATUS);
 	}
 
@@ -1663,6 +1676,9 @@ static DEVICE_API(i3c, it51xxx_i3cm_api) = {
 		.clocks.i3c_scl_tcasr = DT_INST_PROP_OR(n, i3c_scl_tcasr, 1),                      \
 		.clocks.i3c_scl_tcbsr = DT_INST_PROP_OR(n, i3c_scl_tcbsr, 0),                      \
 		.clocks.i2c_scl_hddat = DT_INST_PROP_OR(n, i2c_scl_hddat, 0),                      \
+		.debug_gpio = GPIO_DT_SPEC_INST_GET(n, debug_gpios),                               \
+		.debug_ibi_gpio = GPIO_DT_SPEC_INST_GET(n, debug_ibi_gpios),                       \
+		.debug_end_gpio = GPIO_DT_SPEC_INST_GET(n, debug_end_gpios),                       \
 	};                                                                                         \
 	static struct it51xxx_i3cm_data i3c_data_##n = {                                           \
 		.common.ctrl_config.scl.i3c = DT_INST_PROP_OR(n, i3c_scl_hz, 0),                   \
