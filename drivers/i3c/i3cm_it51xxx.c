@@ -152,6 +152,12 @@ struct it51xxx_i3cm_data {
 		struct i2c_msg *i2c_msgs;
 	} curr_msg;
 
+#ifdef CONFIG_I3C_CALLBACK
+	i3c_callback_t cb;
+	void *cb_userdata;
+	struct k_sem async_sem;
+#endif /* CONFIG_I3C_CALLBACK */
+
 #ifdef CONFIG_I3C_USE_IBI
 	bool ibi_hj_response;
 	uint8_t ibi_target_addr;
@@ -766,7 +772,8 @@ static int it51xxx_broadcast_ccc_xfer(const struct device *dev, struct i3c_ccc_p
 	sys_write8(START_TRANSFER, cfg->base + I3CM01_STATUS);
 	irq_enable(cfg->irq_num);
 
-	return it51xxx_wait_to_complete(dev);
+	return 0;
+	// return it51xxx_wait_to_complete(dev);
 }
 
 static void it51xxx_direct_ccc_xfer_end(const struct device *dev)
@@ -829,9 +836,11 @@ static int it51xxx_start_direct_ccc_xfer(const struct device *dev, struct i3c_cc
 	sys_write8(START_TRANSFER, cfg->base + I3CM01_STATUS);
 	irq_enable(cfg->irq_num);
 
-	return it51xxx_wait_to_complete(dev);
+	return 0;
+	// return it51xxx_wait_to_complete(dev);
 }
 
+#if 0
 static int it51xxx_i3cm_do_ccc(const struct device *dev, struct i3c_ccc_payload *payload)
 {
 	const struct it51xxx_i3cm_config *cfg = dev->config;
@@ -895,6 +904,116 @@ static int it51xxx_i3cm_do_ccc(const struct device *dev, struct i3c_ccc_payload 
 out:
 	k_mutex_unlock(&data->lock);
 	return ret;
+}
+#endif
+
+static int it51xxx_i3cm_perform_ccc(const struct device *dev, struct i3c_ccc_payload *payload,
+				    i3c_callback_t cb, void *userdata)
+{
+	const struct it51xxx_i3cm_config *cfg = dev->config;
+	struct it51xxx_i3cm_data *data = dev->data;
+	bool async = cb ? true : false;
+	int ret = 0;
+
+	if (!payload) {
+		return -EINVAL;
+	}
+
+	LOG_DEV_DBG(dev, "send %s ccc(0x%x)",
+		    i3c_ccc_is_payload_broadcast(payload) ? "broadcast" : "direct",
+		    payload->ccc.id);
+
+	k_mutex_lock(&data->lock, K_FOREVER);
+
+#ifdef CONFIG_I3C_CALLBACK
+	if (async) {
+		k_sem_take(&data->async_sem, K_FOREVER);
+		data->cb = cb;
+		data->cb_userdata = userdata;
+	} else {
+		data->cb = NULL;
+		data->cb_userdata = NULL;
+	}
+#endif /* CONFIG_I3C_CALLBACK */
+
+	/* disable ccc defining byte */
+	sys_write8(sys_read8(cfg->base + I3CM15_CONTROL_2) & ~I3CM_CCC_WITH_DEFINING_BYTE,
+		   cfg->base + I3CM15_CONTROL_2);
+
+	if (!i3c_ccc_is_payload_broadcast(payload)) {
+		if (payload->ccc.data_len > 1) {
+			LOG_DEV_ERR(dev, "only support 1 ccc defining byte");
+			ret = -ENOTSUP;
+			goto out;
+		}
+		if (payload->ccc.data_len > 0 && payload->ccc.data == NULL) {
+			ret = -EINVAL;
+			goto out;
+		}
+		if (payload->targets.payloads == NULL || payload->targets.num_targets == 0) {
+			ret = -EINVAL;
+			goto out;
+		}
+		if (payload->ccc.data_len) {
+			/* set ccc defining byte */
+			sys_write8(sys_read8(cfg->base + I3CM15_CONTROL_2) |
+					   I3CM_CCC_WITH_DEFINING_BYTE,
+				   cfg->base + I3CM15_CONTROL_2);
+			sys_write8(payload->ccc.data[0], cfg->base + I3CM16_CCC_DEFINING_BYTE);
+		}
+	} else {
+		if (payload->ccc.data_len > 0 && payload->ccc.data == NULL) {
+			ret = -EINVAL;
+			goto out;
+		}
+	}
+
+	it51xxx_enable_standby_state(dev, false);
+
+	sys_write8(payload->ccc.id, cfg->base + I3CM03_COMMON_COMMAND_CODE);
+
+	if (i3c_ccc_is_payload_broadcast(payload)) {
+		ret = it51xxx_broadcast_ccc_xfer(dev, payload);
+	} else {
+		ret = it51xxx_start_direct_ccc_xfer(dev, payload);
+	}
+
+	if (!async) {
+		ret = it51xxx_wait_to_complete(dev);
+		it51xxx_enable_standby_state(dev, true);
+	}
+
+out:
+#ifdef CONFIG_I3C_CALLBACK
+	if (async && ret) {
+		k_sem_give(&data->async_sem);
+	}
+#endif /* CONFIG_I3C_CALLBACK */
+	k_mutex_unlock(&data->lock);
+	return ret;
+}
+
+#ifdef CONFIG_I3C_CALLBACK
+static int it51xxx_i3cm_do_ccc_async(const struct device *dev, struct i3c_ccc_payload *payload,
+				     i3c_callback_t cb, void *userdata)
+{
+	struct it51xxx_i3cm_data *data = dev->data;
+
+	if (cb == NULL) {
+		return -EINVAL;
+	}
+
+	if (data->cb != NULL) {
+		return -EWOULDBLOCK;
+	}
+
+	return it51xxx_i3cm_perform_ccc(dev, payload, cb, userdata);
+}
+#endif /* CONFIG_I3C_CALLBACK */
+
+static int it51xxx_i3cm_do_ccc(const struct device *dev, struct i3c_ccc_payload *payload)
+{
+	return it51xxx_i3cm_perform_ccc(dev, payload, NULL, NULL);
 }
 
 static struct i3c_device_desc *it51xxx_i3cm_device_find(const struct device *dev,
@@ -1132,6 +1251,9 @@ static int it51xxx_i3cm_init(const struct device *dev)
 	ctrl_config->is_secondary = false;
 	ctrl_config->supported_hdr = 0x0;
 
+#ifdef CONFIG_I3C_CALLBACK
+	k_sem_init(&data->async_sem, 1, 1);
+#endif
 	k_sem_init(&data->msg_sem, 0, 1);
 	k_mutex_init(&data->lock);
 
@@ -1573,7 +1695,16 @@ static void it51xxx_i3cm_isr(const struct device *dev)
 		}
 
 		if (data->msg_state != IT51XXX_I3CM_MSG_IBI) {
+#ifdef CONFIG_I3C_CALLBACK
+			if (data->cb) {
+				data->cb(dev, 0, data->cb_userdata);
+				k_sem_give(&data->async_sem);
+			} else {
+				k_sem_give(&data->msg_sem);
+			}
+#else
 			k_sem_give(&data->msg_sem);
+#endif
 		}
 
 		data->msg_state = IT51XXX_I3CM_MSG_IDLE;
@@ -1619,6 +1750,10 @@ static DEVICE_API(i3c, it51xxx_i3cm_api) = {
 
 	.do_daa = it51xxx_i3cm_do_daa,
 	.do_ccc = it51xxx_i3cm_do_ccc,
+
+#ifdef CONFIG_I3C_CALLBACK
+	.do_ccc_cb = it51xxx_i3cm_do_ccc_async,
+#endif /* CONFIG_I3C_CALLBACK */
 
 	.i3c_device_find = it51xxx_i3cm_device_find,
 

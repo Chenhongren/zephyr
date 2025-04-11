@@ -720,12 +720,9 @@ __subsystem struct i3c_driver_api {
 	 *
 	 * @return See i3c_transfer()
 	 */
-	int (*i3c_xfers_cb)(const struct device *dev,
-			 struct i3c_device_desc *target,
-			 struct i3c_msg *msgs,
-			 uint8_t num_msgs
-			 i3c_callback_t cb,
-			 void *userdata);
+	int (*i3c_xfers_cb)(const struct device *dev, struct i3c_device_desc *target,
+			    struct i3c_msg *msgs, uint8_t num_msgs, i3c_callback_t cb,
+			    void *userdata);
 #endif
 	/**
 	 * Find a registered I3C target device.
