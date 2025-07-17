@@ -35,6 +35,16 @@ properties:
     description: |
       The KSO17 pin for the selected port.
 
+  kso16-use-gpios:
+    type: phandle-array
+    description: |
+      Use any gpio pin as KSO16.
+
+  kso17-use-gpios:
+    type: phandle-array
+    description: |
+      Use any gpio pin as KSO17.
+
   kso-ignore-mask:
     type: int
     default: 0
