@@ -40,10 +40,14 @@ struct it8xxx2_kbd_config {
 	const struct it8xxx2_kbd_wuc_map_cfg *wuc_map_list;
 	/* KSI[7:0]/KSO[17:0] keyboard scan alternate configuration */
 	const struct pinctrl_dev_config *pcfg;
-	/* KSO16 GPIO cells */
+	/* GPC3 as KSO16 by kbs mode, and its cells */
 	struct gpio_dt_spec kso16_gpios;
-	/* KSO17 GPIO cells */
+	/* GPC5 as KSO17 by kbs mode, and its cells */
 	struct gpio_dt_spec kso17_gpios;
+	/* Any gpio as KSO16, and its cells */
+	struct gpio_dt_spec kso16_use_gpios;
+	/* Any gpio as KSO17, and its cells */
+	struct gpio_dt_spec kso17_use_gpios;
 	/* Mask of signals to ignore */
 	uint32_t kso_ignore_mask;
 };
@@ -56,6 +60,20 @@ struct it8xxx2_kbd_data {
 
 INPUT_KBD_STRUCT_CHECK(struct it8xxx2_kbd_config, struct it8xxx2_kbd_data);
 
+static inline bool it8xxx2_is_dedicated_kso16(const struct device *dev)
+{
+	ARG_UNUSED(dev);
+
+	return !DT_INST_NODE_HAS_PROP(0, kso16_use_gpios);
+}
+
+static inline bool it8xxx2_is_dedicated_kso17(const struct device *dev)
+{
+	ARG_UNUSED(dev);
+
+	return !DT_INST_NODE_HAS_PROP(0, kso17_use_gpios);
+}
+
 static void it8xxx2_kbd_drive_column(const struct device *dev, int col)
 {
 	const struct it8xxx2_kbd_config *const config = dev->config;
@@ -64,6 +82,7 @@ static void it8xxx2_kbd_drive_column(const struct device *dev, int col)
 	const uint32_t kso_mask = BIT_MASK(common->col_size) & ~config->kso_ignore_mask;
 	const uint8_t ksol_mask = kso_mask & 0xff;
 	const uint8_t ksoh1_mask = (kso_mask >> 8) & 0xff;
+	const uint8_t ksoh2_mask = (kso_mask >> 16) & 0xff;
 	uint32_t kso_val;
 	unsigned int key;
 
@@ -87,10 +106,35 @@ static void it8xxx2_kbd_drive_column(const struct device *dev, int col)
 	inst->KBS_KSOL = (inst->KBS_KSOL & ~ksol_mask) | (kso_val & ksol_mask);
 	inst->KBS_KSOH1 = (inst->KBS_KSOH1 & ~ksoh1_mask) | ((kso_val >> 8) & ksoh1_mask);
 	if (common->col_size > 16) {
-		const uint8_t ksoh2_mask = (kso_mask >> 16) & 0xff;
+		if (it8xxx2_is_dedicated_kso16(dev)) {
+			/* TODO: FIXME */
+			inst->KBS_KSOH2 =
+				(inst->KBS_KSOH2 & ~ksoh2_mask) | ((kso_val >> 16) & ksoh2_mask);
+		} else {
+			if ((kso_val >> 16) & 0x01) {
+				gpio_port_set_bits_raw(config->kso16_use_gpios.port,
+						       BIT(config->kso16_use_gpios.pin));
+			} else {
+				gpio_port_clear_bits_raw(config->kso16_use_gpios.port,
+							 BIT(config->kso16_use_gpios.pin));
+			}
+		}
+	}
 
-		inst->KBS_KSOH2 = (inst->KBS_KSOH2 & ~ksoh2_mask) |
-				  ((kso_val >> 16) & ksoh2_mask);
+	if (common->col_size > 17) {
+		if (it8xxx2_is_dedicated_kso17(dev)) {
+			/* TODO: FIXME */
+			inst->KBS_KSOH2 =
+				(inst->KBS_KSOH2 & ~ksoh2_mask) | ((kso_val >> 16) & ksoh2_mask);
+		} else {
+			if ((kso_val >> 17) & 0x01) {
+				gpio_port_set_bits_raw(config->kso17_use_gpios.port,
+						       BIT(config->kso17_use_gpios.pin));
+			} else {
+				gpio_port_clear_bits_raw(config->kso17_use_gpios.port,
+							 BIT(config->kso17_use_gpios.pin));
+			}
+		}
 	}
 	irq_unlock(key);
 }
@@ -168,34 +212,42 @@ static int it8xxx2_kbd_init(const struct device *dev)
 		return -ENOTSUP;
 	}
 
+	/*
+	 * For KSO[16] and KSO[17]:
+	 * 1.GPOTRC:
+	 *   Bit[x] = 1b: Enable the open-drain mode of KSO pin
+	 * 2.GPCRCx:
+	 *   Bit[7:6] = 00b: Select alternate KSO function
+	 *   Bit[2] = 1b: Enable the internal pull-up of KSO pin
+	 *
+	 * NOTE: Set (output | dt_flag) temporarily for kso16 and
+	 * kso17 pins, after that pinctrl_apply_state() set to
+	 * alternate function immediately.
+	 */
 	if (common->col_size > 16) {
-		/*
-		 * For KSO[16] and KSO[17]:
-		 * 1.GPOTRC:
-		 *   Bit[x] = 1b: Enable the open-drain mode of KSO pin
-		 * 2.GPCRCx:
-		 *   Bit[7:6] = 00b: Select alternate KSO function
-		 *   Bit[2] = 1b: Enable the internal pull-up of KSO pin
-		 *
-		 * NOTE: Set (output | dt_flag) temporarily for kso16 and
-		 * kso17 pins, after that pinctrl_apply_state() set to
-		 * alternate function immediately.
-		 */
-		if (!(config->kso_ignore_mask & BIT(16))) {
-			gpio_pin_configure_dt(&config->kso16_gpios, GPIO_OUTPUT);
-		}
-		if (common->col_size > 17 && !(config->kso_ignore_mask & BIT(17))) {
-			gpio_pin_configure_dt(&config->kso17_gpios, GPIO_OUTPUT);
-		}
+		struct gpio_dt_spec kso16_pin = it8xxx2_is_dedicated_kso16(dev)
+							? config->kso16_gpios
+							: config->kso16_use_gpios;
+
+		gpio_pin_configure_dt(&kso16_pin, GPIO_OUTPUT);
 	}
+
+	if (common->col_size > 17) {
+		struct gpio_dt_spec kso17_pin = it8xxx2_is_dedicated_kso17(dev)
+							? config->kso17_gpios
+							: config->kso17_use_gpios;
+
+		gpio_pin_configure_dt(&kso17_pin, GPIO_OUTPUT);
+	}
+
 	/*
 	 * Enable the internal pull-up and kbs mode of the KSI[7:0] pins.
 	 * Enable the internal pull-up and kbs mode of the KSO[15:0] pins.
-	 * Enable the open-drain mode of the KSO[17:0] pins.
+	 * Enable the open-drain mode of the KSO[15:0] & gpc3 & gpc5 pins.
 	 */
 	status = pinctrl_apply_state(config->pcfg, PINCTRL_STATE_DEFAULT);
 	if (status < 0) {
-		LOG_ERR("Failed to configure KSI[7:0] and KSO[17:0] pins");
+		LOG_ERR("Failed to configure KSI and KSO pins kbs mode");
 		return status;
 	}
 
@@ -203,9 +255,23 @@ static int it8xxx2_kbd_init(const struct device *dev)
 	inst->KBS_KSOL = inst->KBS_KSOL & ~ksol_mask;
 	inst->KBS_KSOH1 = inst->KBS_KSOH1 & ~ksoh1_mask;
 	if (common->col_size > 16) {
-		const uint8_t ksoh2_mask = (kso_mask >> 16) & 0xff;
+		if (it8xxx2_is_dedicated_kso16(dev)) {
+			/* TODO: FIXME */
+			inst->KBS_KSOH2 = 0x00;
+		} else {
+			gpio_port_clear_bits_raw(config->kso16_use_gpios.port,
+						 BIT(config->kso16_use_gpios.pin));
+		}
+	}
 
-		inst->KBS_KSOH2 = inst->KBS_KSOH2 & ~ksoh2_mask;
+	if (common->col_size > 17) {
+		if (it8xxx2_is_dedicated_kso17(dev)) {
+			/* TODO: FIXME */
+			inst->KBS_KSOH2 = 0x00;
+		} else {
+			gpio_port_clear_bits_raw(config->kso17_use_gpios.port,
+						 BIT(config->kso17_use_gpios.pin));
+		}
 	}
 
 	for (int i = 0; i < KEYBOARD_KSI_PIN_COUNT; i++) {
@@ -261,6 +327,8 @@ static const struct it8xxx2_kbd_config it8xxx2_kbd_cfg_0 = {
 	.pcfg = PINCTRL_DT_INST_DEV_CONFIG_GET(0),
 	.kso16_gpios = GPIO_DT_SPEC_INST_GET(0, kso16_gpios),
 	.kso17_gpios = GPIO_DT_SPEC_INST_GET(0, kso17_gpios),
+	.kso16_use_gpios = GPIO_DT_SPEC_INST_GET_OR(0, kso16_use_gpios, {0}),
+	.kso17_use_gpios = GPIO_DT_SPEC_INST_GET_OR(0, kso17_use_gpios, {0}),
 	.kso_ignore_mask = DT_INST_PROP(0, kso_ignore_mask),
 };
 
