@@ -162,6 +162,12 @@ static int it8xxx2_kbd_init(const struct device *dev)
 	/* Disable wakeup and interrupt of KSI pins before configuring */
 	it8xxx2_kbd_set_detect_mode(dev, false);
 
+	/* only supports up to 18 column lines currently */
+	if (common->col_size > 18) {
+		LOG_ERR("unsupported column size (%d > 18)", common->col_size);
+		return -ENOTSUP;
+	}
+
 	if (common->col_size > 16) {
 		/*
 		 * For KSO[16] and KSO[17]:
@@ -171,15 +177,15 @@ static int it8xxx2_kbd_init(const struct device *dev)
 		 *   Bit[7:6] = 00b: Select alternate KSO function
 		 *   Bit[2] = 1b: Enable the internal pull-up of KSO pin
 		 *
-		 * NOTE: Set input temporarily for gpio_pin_configure(), after
-		 * that pinctrl_apply_state() set to alternate function
-		 * immediately.
+		 * NOTE: Set (output | dt_flag) temporarily for kso16 and
+		 * kso17 pins, after that pinctrl_apply_state() set to
+		 * alternate function immediately.
 		 */
 		if (!(config->kso_ignore_mask & BIT(16))) {
-			gpio_pin_configure_dt(&config->kso16_gpios, GPIO_INPUT);
+			gpio_pin_configure_dt(&config->kso16_gpios, GPIO_OUTPUT);
 		}
 		if (common->col_size > 17 && !(config->kso_ignore_mask & BIT(17))) {
-			gpio_pin_configure_dt(&config->kso17_gpios, GPIO_INPUT);
+			gpio_pin_configure_dt(&config->kso17_gpios, GPIO_OUTPUT);
 		}
 	}
 	/*
