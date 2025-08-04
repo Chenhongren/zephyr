@@ -14,7 +14,7 @@ endif # DISPLAY
 
 if LVGL
 
-# Configure LVGL to use touchscreen
+# Configure LVGL to use touchscreen with KSCAN API
 
 config INPUT
 	default y
