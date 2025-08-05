@@ -1,0 +1,7 @@
+config INPUT_KBD_MATRIX
+    default y
+
+config INPUT_KBD_DRIVE_COLUMN_HOOK
+    default y
+
+source "Kconfig.zephyr"
