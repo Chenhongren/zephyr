@@ -171,6 +171,15 @@ static inline void trigger_irq(int irq)
 {
 	riscv_clic_irq_set_pending(irq);
 }
+#elif defined(CONFIG_SOC_SERIES_IT8XXX2) || defined(CONFIG_SOC_SERIES_IT51XXX)
+static inline void trigger_irq(int irq)
+{
+	__ASSERT(irq < CONFIG_NUM_IRQS, "attempting to trigger invalid IRQ (%u)", irq);
+	__ASSERT(irq >= CONFIG_GEN_IRQ_START_VECTOR, "attempting to trigger reserved IRQ (%u)",
+		 irq);
+	_sw_isr_table[irq - CONFIG_GEN_IRQ_START_VECTOR].isr(
+		_sw_isr_table[irq - CONFIG_GEN_IRQ_START_VECTOR].arg);
+}
 #else
 static inline void trigger_irq(int irq)
 {
