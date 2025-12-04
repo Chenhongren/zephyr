@@ -1,0 +1,22 @@
+# Copyright (c) 2025 ITE Corporation.
+# SPDX-License-Identifier: Apache-2.0
+
+config ITE_I2C_SAMPLE
+	bool "ITE I2C Sample"
+	default y
+	help
+	  Enable the ite i2c sample driver, including controller and target devices.
+
+#if ITE_I2C_SAMPLE
+
+config ITE_I2C_CONTROLLER
+	bool "ITE I2C controller driver"
+	depends on DT_HAS_ITE_I2C_CONTROLLER_ENABLED
+	default y
+
+config ITE_I2C_TARGET
+	bool "ITE I2C target driver"
+	depends on DT_HAS_ITE_I2C_TARGET_ENABLED
+	default y
+
+#endif # ITE_I2C_SAMPLE
