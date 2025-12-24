@@ -19,9 +19,14 @@ config SOC_IT51526BW
 	bool
 	select SOC_IT51XXX
 
+config SOC_IT58000AW
+	bool
+	select SOC_IT51XXX
+
 config SOC_SERIES
 	default "it51xxx" if SOC_SERIES_IT51XXX
 
 config SOC
 	default "it51526aw" if SOC_IT51526AW
 	default "it51526bw" if SOC_IT51526BW
+	default "it58000aw" if SOC_IT58000AW
