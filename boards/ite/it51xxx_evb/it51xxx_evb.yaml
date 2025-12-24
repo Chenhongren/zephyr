@@ -1,4 +1,4 @@
-identifier: it515xx_evb
+identifier: it51xxx_evb
 name: ITE IT51XXX EVB
 type: mcu
 arch: riscv
