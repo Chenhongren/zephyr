@@ -1,0 +1,98 @@
+/*
+ * Copyright (c) 2026 ITE Corporation. All Rights Reserved.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+#include <zephyr/dt-bindings/pinctrl/it8xxx2-pinctrl.h>
+#include <ite/it51xxx-pinctrl-map.dtsi>
+
+&pinctrl {
+	/* ADC alternate function */
+	/omit-if-no-ref/ adc8_ch8_gpj0_default: adc8_ch8_gpj0_default {
+		pinmuxs = <&pinctrlj 0 IT8XXX2_ALT_FUNC_1>;
+	};
+
+	/omit-if-no-ref/ adc9_ch9_gpj1_default: adc9_ch9_gpj1_default {
+		pinmuxs = <&pinctrlj 1 IT8XXX2_ALT_FUNC_1>;
+	};
+
+	/* PWM alternate function */
+	/omit-if-no-ref/ pwm8_gpc7_default: pwm8_gpc7_default {
+		pinmuxs = <&pinctrlc 7 IT8XXX2_ALT_FUNC_5>;
+	};
+
+	/omit-if-no-ref/ pwm9_gph0_default: pwm9_gph0_default {
+		pinmuxs = <&pinctrlh 0 IT8XXX2_ALT_FUNC_5>;
+	};
+
+	/omit-if-no-ref/ pwm10_gph1_default: pwm10_gph1_default {
+		pinmuxs = <&pinctrlh 1 IT8XXX2_ALT_FUNC_5>;
+	};
+
+	/omit-if-no-ref/ pwm11_gph2_default: pwm11_gph2_default {
+		pinmuxs = <&pinctrlh 2 IT8XXX2_ALT_FUNC_5>;
+	};
+
+	/omit-if-no-ref/ pwm12_gpb1_default: pwm12_gpb1_default {
+		pinmuxs = <&pinctrlb 1 IT8XXX2_ALT_FUNC_3>;
+	};
+
+	/omit-if-no-ref/ pwm13_gpb4_default: pwm13_gpb4_default {
+		pinmuxs = <&pinctrlb 4 IT8XXX2_ALT_FUNC_3>;
+	};
+
+	/omit-if-no-ref/ pwm14_gpb7_default: pwm14_gpb7_default {
+		pinmuxs = <&pinctrlb 7 IT8XXX2_ALT_FUNC_4>;
+	};
+
+	/* Tachometer alternate function */
+	/omit-if-no-ref/ tach3a_gpe6_default: tach3a_gpe6_default {
+		pinmuxs = <&pinctrle 6 IT8XXX2_ALT_FUNC_5>;
+	};
+
+	/omit-if-no-ref/ tach3b_gpa1_default: tach3b_gpa1_default {
+		pinmuxs = <&pinctrla 1 IT8XXX2_ALT_FUNC_3>;
+	};
+
+	/omit-if-no-ref/ tach4a_gpa5_default: tach4a_gpa5_default {
+		pinmuxs = <&pinctrla 5 IT8XXX2_ALT_FUNC_4>;
+	};
+
+	/omit-if-no-ref/ tach4b_gpn5_default: tach4b_gpn5_default {
+		pinmuxs = <&pinctrln 5 IT8XXX2_ALT_FUNC_3>;
+	};
+
+	/omit-if-no-ref/ tach5a_gph3_default: tach5a_gph3_default {
+		pinmuxs = <&pinctrlh 3 IT8XXX2_ALT_FUNC_4>;
+	};
+
+	/omit-if-no-ref/ tach5b_gph4_default: tach5b_gph4_default {
+		pinmuxs = <&pinctrlh 4 IT8XXX2_ALT_FUNC_4>;
+	};
+
+	/omit-if-no-ref/ tach6a_gpe4_default: tach6a_gpe4_default {
+		pinmuxs = <&pinctrle 4 IT8XXX2_ALT_FUNC_3>;
+	};
+
+	/omit-if-no-ref/ tach6b_gpb0_default: tach6b_gpb0_default {
+		pinmuxs = <&pinctrlb 0 IT8XXX2_ALT_FUNC_3>;
+	};
+
+	/* PS2 alternate function */
+	/omit-if-no-ref/ ps2_1_clk_gpd0_default: ps2_1_clk_gpd0_default {
+		pinmuxs = <&pinctrld 0 IT8XXX2_ALT_FUNC_4>;
+	};
+
+	/omit-if-no-ref/ ps2_1_data_gpd1_default: ps2_1_data_gpd1_default {
+		pinmuxs = <&pinctrld 1 IT8XXX2_ALT_FUNC_4>;
+	};
+
+	/omit-if-no-ref/ ps2_2_clk_gpe0_default: ps2_2_clk_gpe0_default {
+		pinmuxs = <&pinctrle 0 IT8XXX2_ALT_FUNC_5>;
+	};
+
+	/omit-if-no-ref/ ps2_2_data_gpe7_default: ps2_2_data_gpe7_default {
+		pinmuxs = <&pinctrle 7 IT8XXX2_ALT_FUNC_4>;
+	};
+};

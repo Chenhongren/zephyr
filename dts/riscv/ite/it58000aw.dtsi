@@ -1,0 +1,454 @@
+/*
+ * Copyright (c) 2026 ITE Corporation. All Rights Reserved.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+#include <ite/it51xxx.dtsi>
+#include <ite/it51xxx-wuc-map.dtsi>
+
+/ {
+	soc {
+		wuc5: wakeup-controller@f01b0c {
+			compatible = "ite,it51xxx-wuc";
+			reg = <0x00f01b0c 1   /* WUEMR5 */
+			       0x00f01b0d 1   /* WUESR5 */
+			       IT51XXX_WUC_UNUSED_REG 1   /* WUENR5 */
+			       0x00f01b0f 1   /* WUBEMR5 */
+			       0x00f04412 1>; /* WUEDR5 */
+			wakeup-controller;
+			#wuc-cells = <1>;
+		};
+
+		ps2_1: ps2@f01701 {
+			compatible = "ite,it51xxx-ps2";
+			reg = <0x00f01701 0x0d>;
+			interrupts-extended = <&intc IT51XXX_IRQ_PS2_1 IRQ_TYPE_EDGE_RISING>;
+			#address-cells = <1>;
+			#size-cells = <0>;
+			status = "disabled";
+		};
+
+		ps2_2: ps2@f01702 {
+			compatible = "ite,it51xxx-ps2";
+			reg = <0x00f01702 0x0e>;
+			interrupts-extended = <&intc IT51XXX_IRQ_PS2_2 IRQ_TYPE_EDGE_RISING>;
+			#address-cells = <1>;
+			#size-cells = <0>;
+			status = "disabled";
+		};
+
+		pwm8: pwm@f05300 {
+			compatible = "ite,it51xxx-pwm";
+			reg = <0x00f05300 0xf
+			       0x00f04680 0x80>;
+			status = "disabled";
+			#pwm-cells = <3>;
+		};
+
+		pwm9: pwm@f05310 {
+			compatible = "ite,it51xxx-pwm";
+			reg = <0x00f05310 0xf
+			       0x00f04680 0x80>;
+			status = "disabled";
+			#pwm-cells = <3>;
+		};
+
+		pwm10: pwm@f05320 {
+			compatible = "ite,it51xxx-pwm";
+			reg = <0x00f05320 0xf
+			       0x00f04680 0x80>;
+			status = "disabled";
+			#pwm-cells = <3>;
+		};
+
+		pwm11: pwm@f05330 {
+			compatible = "ite,it51xxx-pwm";
+			reg = <0x00f05330 0xf
+			       0x00f04680 0x80>;
+			status = "disabled";
+			#pwm-cells = <3>;
+		};
+
+		pwm12: pwm@f05340 {
+			compatible = "ite,it51xxx-pwm";
+			reg = <0x00f05340 0xf
+			       0x00f04680 0x80>;
+			status = "disabled";
+			#pwm-cells = <3>;
+		};
+
+		pwm13: pwm@f05350 {
+			compatible = "ite,it51xxx-pwm";
+			reg = <0x00f05350 0xf
+			       0x00f04680 0x80>;
+			status = "disabled";
+			#pwm-cells = <3>;
+		};
+
+		pwm14: pwm@f05360 {
+			compatible = "ite,it51xxx-pwm";
+			reg = <0x00f05360 0xf
+			       0x00f04680 0x80>;
+			status = "disabled";
+			#pwm-cells = <3>;
+		};
+
+		tach3: tach@f053c0 {
+			compatible = "ite,it51xxx-tach";
+			reg = <0x00f053c0 0xf>;
+			status = "disabled";
+		};
+
+		tach4: tach@f053d0 {
+			compatible = "ite,it51xxx-tach";
+			reg = <0x00f053d0 0xf>;
+			status = "disabled";
+		};
+
+		tach5: tach@f053e0 {
+			compatible = "ite,it51xxx-tach";
+			reg = <0x00f053e0 0xf>;
+			status = "disabled";
+		};
+
+		tach6: tach@f053f0 {
+			compatible = "ite,it51xxx-tach";
+			reg = <0x00f053f0 0xf>;
+			status = "disabled";
+		};
+	};
+};
+
+&wuc1 {
+	hw-either-edge-supported;
+	reg = <0x00f01b00 1   /* WUEMR1 */
+	       0x00f01b04 1   /* WUESR1 */
+	       0x00f01b08 1   /* WUENR1 */
+	       0x00f01b3c 1   /* WUBEMR1 */
+	       0x00f04402 1>; /* WUEDR1 */
+};
+
+&wuc2 {
+	hw-either-edge-supported;
+	reg = <0x00f01b01 1   /* WUEMR2 */
+	       0x00f01b05 1   /* WUESR2 */
+	       IT51XXX_WUC_UNUSED_REG 1   /* WUENR2 */
+	       0x00f01b3d 1   /* WUBEMR2 */
+	       0x00f04406 1>; /* WUEDR2 */
+};
+
+&wuc3 {
+	hw-either-edge-supported;
+	reg = <0x00f01b02 1   /* WUEMR3 */
+	       0x00f01b06 1   /* WUESR3 */
+	       0x00f01b0a 1   /* WUENR3 */
+	       0x00f01b3e 1   /* WUBEMR3 */
+	       0x00f0440a 1>; /* WUEDR3 */
+};
+
+&wuc4 {
+	hw-either-edge-supported;
+	reg = <0x00f01b03 1   /* WUEMR4 */
+	       0x00f01b07 1   /* WUESR4 */
+	       0x00f01b0b 1   /* WUENR4 */
+	       0x00f01b3f 1   /* WUBEMR4 */
+	       0x00f0440e 1>; /* WUEDR4 */
+};
+
+&wuc5 {
+	hw-either-edge-supported;
+	reg = <0x00f01b0c 1   /* WUEMR5 */
+	       0x00f01b0d 1   /* WUESR5 */
+	       IT51XXX_WUC_UNUSED_REG 1   /* WUENR5 */
+	       0x00f01b0f 1   /* WUBEMR5 */
+	       0x00f04412 1>; /* WUEDR5 */
+};
+
+&wuc6 {
+	hw-either-edge-supported;
+	reg = <0x00f01b10 1   /* WUEMR6 */
+	       0x00f01b11 1   /* WUESR6 */
+	       IT51XXX_WUC_UNUSED_REG 1   /* WUENR6 */
+	       0x00f01b13 1   /* WUBEMR6 */
+	       0x00f04416 1>; /* WUEDR6 */
+};
+
+&wuc7 {
+	hw-either-edge-supported;
+	/delete-property/ both-edge-trigger;
+	reg = <0x00f01b14 1   /* WUEMR7 */
+	       0x00f01b15 1   /* WUESR7 */
+	       IT51XXX_WUC_UNUSED_REG 1   /* WUENR7 */
+	       0x00f01b17 1   /* WUBEMR7 */
+	       0x00f0441a 1>; /* WUEDR7 */
+};
+
+&wuc8 {
+	hw-either-edge-supported;
+	reg = <0x00f01b18 1   /* WUEMR8 */
+	       0x00f01b19 1   /* WUESR8 */
+	       IT51XXX_WUC_UNUSED_REG 1   /* WUENR8 */
+	       0x00f01b1b 1   /* WUBEMR8 */
+	       0x00f0441e 1>; /* WUEDR8 */
+};
+
+&wuc9 {
+	hw-either-edge-supported;
+	reg = <0x00f01b1c 1   /* WUEMR9 */
+	       0x00f01b1d 1   /* WUESR9 */
+	       IT51XXX_WUC_UNUSED_REG 1   /* WUENR9 */
+	       0x00f01b1f 1   /* WUBEMR9 */
+	       0x00f04422 1>; /* WUEDR9 */
+};
+
+&wuc10 {
+	hw-either-edge-supported;
+	/delete-property/ both-edge-trigger;
+	reg = <0x00f01b20 1   /* WUEMR10 */
+	       0x00f01b21 1   /* WUESR10 */
+	       IT51XXX_WUC_UNUSED_REG 1   /* WUENR10 */
+	       0x00f01b23 1   /* WUBEMR10 */
+	       0x00f04426 1>; /* WUEDR10 */
+};
+
+&wuc11 {
+	hw-either-edge-supported;
+	reg = <0x00f01b24 1   /* WUEMR11 */
+	       0x00f01b25 1   /* WUESR11 */
+	       IT51XXX_WUC_UNUSED_REG 1   /* WUENR11 */
+	       0x00f01b27 1   /* WUBEMR11 */
+	       0x00f0442a 1>; /* WUEDR11 */
+};
+
+&wuc12 {
+	hw-either-edge-supported;
+	/delete-property/ both-edge-trigger;
+	reg = <0x00f01b28 1   /* WUEMR12 */
+	       0x00f01b29 1   /* WUESR12 */
+	       IT51XXX_WUC_UNUSED_REG 1   /* WUENR12 */
+	       0x00f01b2b 1   /* WUBEMR12 */
+	       0x00f0442e 1>; /* WUEDR12 */
+};
+
+&wuc13 {
+	hw-either-edge-supported;
+	reg = <0x00f01b2c 1   /* WUEMR13 */
+	       0x00f01b2d 1   /* WUESR13 */
+	       IT51XXX_WUC_UNUSED_REG 1   /* WUENR13 */
+	       0x00f01b2f 1   /* WUBEMR13 */
+	       0x00f04432 1>; /* WUEDR13 */
+};
+
+&wuc14 {
+	hw-either-edge-supported;
+	reg = <0x00f01b30 1   /* WUEMR14 */
+	       0x00f01b31 1   /* WUESR14 */
+	       IT51XXX_WUC_UNUSED_REG 1   /* WUENR14 */
+	       0x00f01b33 1   /* WUBEMR14 */
+	       0x00f04436 1>; /* WUEDR14 */
+};
+
+&wuc15 {
+	hw-either-edge-supported;
+	reg = <0x00f01b34 1   /* WUEMR15 */
+	       0x00f01b35 1   /* WUESR15 */
+	       IT51XXX_WUC_UNUSED_REG 1   /* WUENR15 */
+	       0x00f01b37 1   /* WUBEMR15 */
+	       0x00f0443a 1>; /* WUEDR15 */
+};
+
+&wuc16 {
+	hw-either-edge-supported;
+	reg = <0x00f01b38 1   /* WUEMR16 */
+	       0x00f01b39 1   /* WUESR16 */
+	       IT51XXX_WUC_UNUSED_REG 1   /* WUENR16 */
+	       0x00f01b3b 1   /* WUBEMR16 */
+	       0x00f0443e 1>; /* WUEDR16 */
+};
+
+&wuc_fake {
+	hw-either-edge-supported;
+	reg = <0 1 0 1 0 1 0 1 0 1>;
+};
+
+&pinctrla {
+	func3-gcr = <NO_FUNC 0xf016cc NO_FUNC NO_FUNC 0xf016fe 0xf016fe 0xf016f0 0xf016f0>;
+	func3-en-mask = <0 BIT(1) 0 0 BIT(5) BIT(5) BIT(4) BIT(3)>;
+	func4-gcr = <NO_FUNC NO_FUNC NO_FUNC NO_FUNC NO_FUNC 0xf016cc NO_FUNC NO_FUNC>;
+	func4-en-mask = <0 0 0 0 0 BIT(2) 0 0>;
+};
+
+&pinctrlb {
+	func3-gcr = <0xf016cc 0xf016c9 0xf016f0 NO_FUNC 0xf016c9 0xf016f7 NO_FUNC NO_FUNC>;
+	func3-en-mask = <BIT(7) BIT(4) BIT(1) 0 BIT(5) BIT(5) 0 0>;
+	func4-gcr = <NO_FUNC NO_FUNC 0xf016ed NO_FUNC NO_FUNC 0xf016ed NO_FUNC 0xf016c9>;
+	func4-en-mask = <0 0 BIT(2) 0 0 BIT(3) 0 BIT(6)>;
+	volt-sel = <0xf05011 NO_FUNC 0xf05015 0xf05017 0xf05019 0xf0501b 0xf0501d 0xf0501f>;
+	volt-sel-mask = <BIT(3) 0 BIT(3) BIT(3) BIT(3) BIT(3) BIT(3) BIT(3)>;
+};
+
+&pinctrlc {
+	func3-gcr = <NO_FUNC NO_FUNC NO_FUNC NO_FUNC 0xf016f0 NO_FUNC 0xf016f0 0xf016f6>;
+	func3-en-mask = <0 0 0 0 BIT(4) 0 BIT(4) BIT(7)>;
+	func4-gcr = <NO_FUNC NO_FUNC NO_FUNC NO_FUNC NO_FUNC NO_FUNC 0xf016f4 0xf016f5>;
+	func4-en-mask = <0 0 0 0 0 0 BIT(0) BIT(0)>;
+	func5-gcr = <NO_FUNC NO_FUNC NO_FUNC NO_FUNC NO_FUNC NO_FUNC NO_FUNC 0xf016c9>;
+	func5-en-mask = <0 0 0 0 0 0 0 BIT(0)>;
+};
+
+&pinctrld {
+	func3-gcr = <0xf016ed 0xf016ed NO_FUNC NO_FUNC 0xf03292 0xf016f0 NO_FUNC NO_FUNC>;
+	func3-en-mask = <BIT(1) BIT(1) 0 0 BIT(5) BIT(1) 0 0>;
+	func4-gcr = <0xf016ca 0xf016ca NO_FUNC NO_FUNC NO_FUNC NO_FUNC NO_FUNC NO_FUNC>;
+	func4-en-mask = <BIT(4) BIT(4) 0 0 0 0 0 0>;
+};
+
+&pinctrle {
+	func3-gcr = <0xf016f3 0xf016ed 0xf016ed 0xf016ed 0xf016cc 0xf016f0 0xf016fe 0xf016fe>;
+	func3-en-mask = <BIT(0) BIT(5) BIT(6) BIT(6) BIT(6) BIT(3) BIT(7) BIT(4)>;
+	func4-gcr = <0xf016fe NO_FUNC NO_FUNC NO_FUNC NO_FUNC NO_FUNC 0xf016f5 0xf016ca>;
+	func4-en-mask = <BIT(4) 0 0 0 0 0 BIT(1) BIT(5)>;
+	func5-gcr = <0xf016ca NO_FUNC NO_FUNC NO_FUNC NO_FUNC NO_FUNC 0xf016cc NO_FUNC>;
+	func5-en-mask = <BIT(5) 0 0 0 0 0 BIT(0) 0>;
+};
+
+&pinctrlh {
+	func3-gcr = <0xf016f0 0xf016f5 0xf016f5 0xf016f0 0xf016f0 NO_FUNC NO_FUNC 0xf016f0>;
+	func3-en-mask = <BIT(1) BIT(2) BIT(3) BIT(1) BIT(1) 0 0 BIT(5)>;
+	func4-gcr = <0xf016ed 0xf016f1 0xf016f1 0xf016cc 0xf016cc NO_FUNC NO_FUNC 0xf016f5>;
+	func4-en-mask = <BIT(2) BIT(5) BIT(5) BIT(4) BIT(5) 0 0 BIT(7)>;
+	func5-gcr = <0xf016c9 0xf016c9 0xf016c9 NO_FUNC NO_FUNC NO_FUNC NO_FUNC NO_FUNC>;
+	func5-en-mask = <BIT(1) BIT(2) BIT(3) 0 0 0 0 0>;
+};
+
+&pinctrlk {
+	reg = <0xf01d2d 1   /* KSOLGCTRL */
+	       0xf01d02 1   /* KSOCTRL */
+	       0xf01690 1>; /* GPCR */
+};
+
+&pinctrll {
+	reg = <0xf01d2e 1   /* KSOHGCTRL */
+	       0xf01d02 1   /* KSOCTRL */
+	       0xf01698 1>; /* GPCR */
+};
+
+&pinctrln {
+	reg = <0xf01d2c 1   /* KSIGCTRL */
+	       0xf01d05 1   /* KSICTRL */
+	       0xf016a8 1>; /* GPCR */
+	func3-gcr = <NO_FUNC NO_FUNC NO_FUNC NO_FUNC NO_FUNC 0xf016cc NO_FUNC NO_FUNC>;
+	func3-en-mask = <0 0 0 0 0 BIT(3) 0 0>;
+};
+
+&i2c0 {
+	fifo-enable;
+	fifo-ctrl-offset = <0x22>;
+};
+
+&i2c1 {
+	fifo-enable;
+	fifo-ctrl-offset = <0x20>;
+};
+
+&i2c2 {
+	fifo-enable;
+	fifo-ctrl-offset = <0x21>;
+};
+
+&i2c3 {
+	fifo-enable;
+	fifo-ctrl-offset = <0x1e>;
+};
+
+&i2c4 {
+	fifo-enable;
+	fifo-ctrl-offset = <0x1d>;
+};
+
+&i2c5 {
+	fifo-enable;
+	fifo-ctrl-offset = <0x1d>;
+
+};
+
+&i2c6 {
+	fifo-enable;
+	fifo-ctrl-offset = <0x1d>;
+
+};
+
+&i2c7 {
+	fifo-enable;
+	fifo-ctrl-offset = <0x1d>;
+
+};
+
+&i2c8 {
+	fifo-enable;
+	fifo-ctrl-offset = <0x1d>;
+
+};
+
+&gpiob {
+	ngpios = <8>;
+	interrupts = <IT51XXX_IRQ_WU101 IRQ_TYPE_LEVEL_HIGH
+		      IT51XXX_IRQ_WU102 IRQ_TYPE_LEVEL_HIGH
+		      IT51XXX_IRQ_WU84 IRQ_TYPE_LEVEL_HIGH
+		      IT51XXX_IRQ_WU103 IRQ_TYPE_LEVEL_HIGH
+		      IT51XXX_IRQ_WU94 IRQ_TYPE_LEVEL_HIGH
+		      IT51XXX_IRQ_WU104 IRQ_TYPE_LEVEL_HIGH
+		      IT51XXX_IRQ_WU105 IRQ_TYPE_LEVEL_HIGH
+		      IT51XXX_IRQ_WU106 IRQ_TYPE_LEVEL_HIGH>;
+	wucctrl = <&wuc_wu101   /* GPB0 */
+		   &wuc_wu102   /* GPB1 */
+		   &wuc_wu84    /* GPB2 */
+		   &wuc_wu103   /* GPB3 */
+		   &wuc_wu94    /* GPB4 */
+		   &wuc_wu104   /* GPB5 */
+		   &wuc_wu105   /* GPB6 */
+		   &wuc_wu106>; /* GPB7 */
+};
+
+&gpiok {
+	interrupts = <IT51XXX_IRQ_WU50 IRQ_TYPE_LEVEL_HIGH
+		      IT51XXX_IRQ_WU51 IRQ_TYPE_LEVEL_HIGH
+		      IT51XXX_IRQ_WU52 IRQ_TYPE_LEVEL_HIGH
+		      IT51XXX_IRQ_WU53 IRQ_TYPE_LEVEL_HIGH
+		      IT51XXX_IRQ_WU54 IRQ_TYPE_LEVEL_HIGH
+		      IT51XXX_IRQ_WU55 IRQ_TYPE_LEVEL_HIGH
+		      IT51XXX_IRQ_WU56 IRQ_TYPE_LEVEL_HIGH
+		      IT51XXX_IRQ_WU57 IRQ_TYPE_LEVEL_HIGH>;
+	wucctrl = <&wuc_wu50   /* GPK0 */
+		   &wuc_wu51   /* GPK1 */
+		   &wuc_wu52   /* GPK2 */
+		   &wuc_wu53   /* GPK3 */
+		   &wuc_wu54   /* GPK4 */
+		   &wuc_wu55   /* GPK5 */
+		   &wuc_wu56   /* GPK6 */
+		   &wuc_wu57>; /* GPK7 */
+};
+
+&gpiol {
+	interrupts = <IT51XXX_IRQ_WU136 IRQ_TYPE_LEVEL_HIGH
+		      IT51XXX_IRQ_WU137 IRQ_TYPE_LEVEL_HIGH
+		      IT51XXX_IRQ_WU138 IRQ_TYPE_LEVEL_HIGH
+		      IT51XXX_IRQ_WU139 IRQ_TYPE_LEVEL_HIGH
+		      IT51XXX_IRQ_WU140 IRQ_TYPE_LEVEL_HIGH
+		      IT51XXX_IRQ_WU141 IRQ_TYPE_LEVEL_HIGH
+		      IT51XXX_IRQ_WU142 IRQ_TYPE_LEVEL_HIGH
+		      IT51XXX_IRQ_WU143 IRQ_TYPE_LEVEL_HIGH>;
+	wucctrl = <&wuc_wu136     /* GPL0 */
+		   &wuc_wu137     /* GPL1 */
+		   &wuc_wu138     /* GPL2 */
+		   &wuc_wu139     /* GPL3 */
+		   &wuc_wu140     /* GPL4 */
+		   &wuc_wu141     /* GPL5 */
+		   &wuc_wu142     /* GPL6 */
+		   &wuc_wu143>;   /* GPL7 */
+};
+
+&adc0 {
+	channel-count = <10>;
+};
