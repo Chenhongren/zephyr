@@ -4,3 +4,4 @@ board:
   vendor: ite
   socs:
     - name: it51526aw
+    - name: it58000aw
