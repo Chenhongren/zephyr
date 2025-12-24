@@ -1,0 +1,15 @@
+identifier: it51xxx_evb/it58000aw
+name: ITE-IT51XXX-EVB-IT58000AW
+type: mcu
+arch: riscv
+toolchain:
+  - zephyr
+ram: 128
+supported:
+  - flash
+  - gpio
+  - i2c
+  - pinctrl
+  - pm
+  - uart
+vendor: ite
