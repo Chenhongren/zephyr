@@ -1,0 +1,20 @@
+# Copyright (c) 2026 ITE Corporation. All Rights Reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+description: IT51XXX PS2 controller
+
+compatible: "ite,it51xxx-ps2"
+
+include: [ps2.yaml, pinctrl-device.yaml]
+
+properties:
+  reg:
+    required: true
+
+  interrupts:
+    required: true
+
+  wucctrl:
+    type: phandles
+    description: |
+      ps2 wuc interrupt.
