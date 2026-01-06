@@ -11,6 +11,11 @@
 	it51xxx-wuc-map {
 		compatible = "ite,it51xxx-wuc-map";
 
+		/* WUC group 1 */
+		wuc_wu10: wu10 {
+			wucs = <&wuc1 0x03 >; /* PS2CLK0 and PS2DATA0 */
+		};
+
 		/* WUC group 2 */
 		wuc_wu20: wu20 {
 			wucs = <&wuc2 BIT(0)>; /* GPD0 */
