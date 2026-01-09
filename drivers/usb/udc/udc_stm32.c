@@ -4,6 +4,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+#error This UDC driver has to be adapted to new control transfer handling
+
 /**
  * @file  udc_stm32.c
  * @brief STM32 USB device controller (UDC) driver
@@ -1345,7 +1347,6 @@ static int udc_stm32_driver_preinit(const struct device *dev)
 	}
 
 	data->caps.rwup = true;
-	data->caps.out_ack = false;
 	data->caps.addr_before_status = true;
 	data->caps.mps0 = UDC_MPS0_64;
 	if (cfg->selected_speed == PCD_SPEED_HIGH) {

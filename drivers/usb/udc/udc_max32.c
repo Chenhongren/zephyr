@@ -4,6 +4,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+#error This UDC driver has to be adapted to new control transfer handling
+
 #include "udc_common.h"
 
 #include <string.h>
@@ -744,7 +746,7 @@ static int udc_max32_driver_preinit(const struct device *dev)
 
 	data->caps.rwup = true;
 	data->caps.can_detect_vbus = true;
-	data->caps.out_ack = true;
+	data->caps.autostatus_after_data_in = true;
 	data->caps.mps0 = UDC_MPS0_64;
 	if (config->speed_idx == 2) {
 		data->caps.hs = true;
