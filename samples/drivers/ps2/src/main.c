@@ -195,6 +195,6 @@ int main(void)
 	/*Make sure there is a PS/2 device connected */
 	initialize_mouse();
 
-	k_timer_start(&block_ps2_timer, K_SECONDS(2), K_SECONDS(1));
+	// k_timer_start(&block_ps2_timer, K_SECONDS(2), K_SECONDS(1));
 	return 0;
 }

@@ -76,6 +76,9 @@ struct it51xxx_ps2_config {
 };
 
 #define DEBUG_GPIOA0 1 /* TODO: REMOVEME */
+#define DEBUG_GPIOA1 1 /* TODO: REMOVEME */
+#define DEBUG_GPIOA2 1 /* TODO: REMOVEME */
+#define DEBUG_GPIOA3 1 /* TODO: REMOVEME */
 
 #if DEBUG_GPIOA0
 static void it51xxx_toggle_gpioa0(void)
@@ -94,22 +97,93 @@ static void it51xxx_toggle_gpioa0(void)
 
 	sys_write8(gpioa_val, 0xf01601);
 }
-#endif
+#endif /* DEBUG_GPIOA0 */
+
+#if DEBUG_GPIOA1
+static void it51xxx_set_gpioa1(bool high)
+{
+	uint8_t gpioa_val;
+
+	sys_write8(0x40, 0xf01611);
+
+	gpioa_val = sys_read8(0xf01601);
+
+	if (!high) {
+		gpioa_val &= ~BIT(1);
+	} else {
+		gpioa_val |= BIT(1);
+	}
+
+	sys_write8(gpioa_val, 0xf01601);
+}
+#endif /* DEBUG_GPIOA1 */
+
+#if DEBUG_GPIOA2
+static void it51xxx_toggle_gpioa2(void)
+{
+	uint8_t gpioa_val;
+
+	sys_write8(0x40, 0xf01612);
+
+	gpioa_val = sys_read8(0xf01601);
+
+	if (gpioa_val & BIT(2)) {
+		gpioa_val &= ~BIT(2);
+	} else {
+		gpioa_val |= BIT(2);
+	}
+
+	sys_write8(gpioa_val, 0xf01601);
+}
+#endif /* DEBUG_GPIOA2 */
+
+#if DEBUG_GPIOA3
+static void it51xxx_toggle_gpioa3(void)
+{
+	uint8_t gpioa_val;
+
+	sys_write8(0x40, 0xf01613);
+
+	gpioa_val = sys_read8(0xf01601);
+
+	if (gpioa_val & BIT(3)) {
+		gpioa_val &= ~BIT(3);
+	} else {
+		gpioa_val |= BIT(3);
+	}
+
+	sys_write8(gpioa_val, 0xf01601);
+}
+#endif /* DEBUG_GPIOA3 */
 
 static inline void enable_standby_state(bool enable)
 {
 	if (enable) {
-		pm_policy_state_lock_put(PM_STATE_STANDBY, PM_ALL_SUBSTATES);
+		// pm_policy_state_lock_put(PM_STATE_STANDBY, PM_ALL_SUBSTATES);
+#if DEBUG_GPIOA1
+	it51xxx_set_gpioa1(false);
+#endif
 	} else {
-		pm_policy_state_lock_get(PM_STATE_STANDBY, PM_ALL_SUBSTATES);
+		// pm_policy_state_lock_get(PM_STATE_STANDBY, PM_ALL_SUBSTATES);
+#if DEBUG_GPIOA1
+	it51xxx_set_gpioa1(true);
+#endif
 	}
 }
+
+static void it51xxx_ps2_wu_work_handler(struct k_work *work)
+{
+	enable_standby_state(false);
+	LOG_DBG("ps2 clk wake-up triggered");
+}
+
+K_WORK_DEFINE(it51xxx_ps2_wu_work, it51xxx_ps2_wu_work_handler);
 
 static void it51xxx_ps2_enable_wu_irq(const struct device *dev, bool enable)
 {
 	const struct it51xxx_ps2_config *cfg = dev->config;
 
-	/* Clear pending interrupt */
+	/* clear pending interrupt */
 	it51xxx_wuc_clear_status(cfg->wuc.dev, cfg->wuc.mask);
 
 	if (enable) {
@@ -124,23 +198,20 @@ static void it51xxx_ps2_wu_isr(const void *arg)
 	const struct device *dev = arg;
 
 	it51xxx_ps2_enable_wu_irq(dev, false);
-	enable_standby_state(false);
-	LOG_INF("ps2 clk wu triggered");
 
-#if DEBUG_GPIOA0
-	// it51xxx_toggle_gpioa0();
-#endif
+	/* PM policy APIs are not ISR-safe, defer to workqueue */
+	k_work_submit(&it51xxx_ps2_wu_work);
 }
 
 static void it51xxx_ps2_wuc_init(const struct device *dev)
 {
 	const struct it51xxx_ps2_config *cfg = dev->config;
 
-	/* initializing the wui */
+	/* initialize the wui */
 	it51xxx_wuc_set_polarity(cfg->wuc.dev, cfg->wuc.mask, WUC_TYPE_EDGE_RISING);
 	it51xxx_wuc_clear_status(cfg->wuc.dev, cfg->wuc.mask);
 
-	/* enabling the wui */
+	/* enable the wui */
 	it51xxx_wuc_enable(cfg->wuc.dev, cfg->wuc.mask);
 
 	/* connect wu (ps2 clk) interrupt but make it disabled initially */
@@ -161,6 +232,8 @@ static int it51xxx_ps2_configure(const struct device *dev, ps2_callback_t callba
 	/* configure ps2 bus as idle state */
 	sys_write8(CTRL_CLK_LINE | CTRL_DATA_LINE, cfg->base + PS200_CTRL_REG);
 
+	// it51xxx_ps2_enable_wu_irq(dev, true);
+
 	k_sem_give(&data->lock);
 
 	return 0;
@@ -171,23 +244,8 @@ static int it51xxx_ps2_bus_busy(const struct device *dev)
 	const struct it51xxx_ps2_config *cfg = dev->config;
 	uint8_t status = sys_read8(cfg->base + PS208_STATUS);
 
-	/* TODO: CHECK:rough? OR status bit? */
 	return ((status & BUS_IDLE) != BUS_IDLE || (status & START_STATUS)) ? -EBUSY : 0;
 }
-
-#if 0
-static int it51xxx_ps2_read(const struct device *dev, uint8_t *value)
-{
-	const struct it51xxx_ps2_config *cfg = dev->config;
-	struct it51xxx_ps2_data *data = dev->data;
-
-	LOG_DBG("%s ITE Debug %d", __func__, __LINE__);
-
-	*value = sys_read8(cfg->base + PS20C_DATA_REG);
-
-	return 0;
-}
-#endif
 
 static inline void it51xxx_ps2_int_enable(const struct device *dev)
 {
@@ -201,7 +259,8 @@ static int it51xxx_ps2_write(const struct device *dev, uint8_t value)
 	const struct it51xxx_ps2_config *cfg = dev->config;
 	struct it51xxx_ps2_data *data = dev->data;
 	uint8_t ctrl_val;
-	int ret = 0, i = 0;
+	unsigned int key;
+	int ret, i = 0;
 
 	if (k_sem_take(&data->lock, K_NO_WAIT)) {
 		return -EACCES;
@@ -219,7 +278,7 @@ static int it51xxx_ps2_write(const struct device *dev, uint8_t value)
 		goto out;
 	}
 
-	pm_policy_state_lock_get(PM_STATE_STANDBY, PM_ALL_SUBSTATES);
+	enable_standby_state(false);
 
 	/* enable hardware mode, pull down clk line and pull up data line */
 	ctrl_val = TX_MODE_SELECTION | HARDWARE_MODE_ENABLE | CTRL_DATA_LINE;
@@ -243,7 +302,17 @@ static int it51xxx_ps2_write(const struct device *dev, uint8_t value)
 	sys_write8(ctrl_val, cfg->base + PS200_CTRL_REG);
 
 	k_sem_take(&data->tx_sem, K_FOREVER);
-	pm_policy_state_lock_put(PM_STATE_STANDBY, PM_ALL_SUBSTATES);
+
+	it51xxx_ps2_enable_wu_irq(dev, true);
+	enable_standby_state(true);
+
+#if DEBUG_GPIOA3
+	it51xxx_toggle_gpioa3();
+#endif
+
+	key = irq_lock();
+	ret = data->xfer_status;
+	irq_unlock(key);
 
 out:
 	k_sem_give(&data->lock);
@@ -276,11 +345,7 @@ static int it51xxx_ps2_enable_interface(const struct device *dev)
 
 static DEVICE_API(ps2, it51xxx_ps2_api) = {
 	.config = it51xxx_ps2_configure,
-#if 0 /* TODO: CHECKME: no need to support rx-only? */
-	.read = it51xxx_ps2_read,
-#else
 	.read = NULL,
-#endif
 	.write = it51xxx_ps2_write,
 	.disable_callback = it51xxx_ps2_inhibit_interface,
 	.enable_callback = it51xxx_ps2_enable_interface,
@@ -302,7 +367,7 @@ static int it51xxx_ps2_init(const struct device *dev)
 	k_sem_init(&data->tx_sem, 0, 1);
 
 	/* TODO: CHECKME */
-	pm_policy_state_lock_get(PM_STATE_STANDBY, PM_ALL_SUBSTATES);
+	// enable_standby_state(false);
 
 	it51xxx_ps2_wuc_init(dev);
 
@@ -353,6 +418,9 @@ static void it51xxx_ps2_isr(const struct device *dev)
 		sys_write8(HARDWARE_MODE_ENABLE | CTRL_CLK_LINE | CTRL_DATA_LINE,
 			   cfg->base + PS200_CTRL_REG);
 
+		it51xxx_ps2_enable_wu_irq(dev, true);
+		enable_standby_state(true);
+
 #if DEBUG_GPIOA0
 		it51xxx_toggle_gpioa0();
 #endif
@@ -361,21 +429,29 @@ static void it51xxx_ps2_isr(const struct device *dev)
 	if (int_status & TRANSACTIOIN_DONE) {
 		LOG_DBG("isr: %s: xfer done", xfer_is_tx ? "tx" : "rx");
 
+		data->xfer_status = 0;
 		if (xfer_is_tx) {
 			uint8_t ctrl_val;
 
 			ctrl_val = HARDWARE_MODE_ENABLE | CTRL_CLK_LINE | CTRL_DATA_LINE;
 			sys_write8(ctrl_val, cfg->base + PS200_CTRL_REG);
 
+			// it51xxx_ps2_enable_wu_irq(dev, true);
+			// enable_standby_state(true);
+
 			/* enable transaction interrupt */
 			it51xxx_ps2_int_enable(dev);
 
-			data->xfer_status = 0;
 			k_sem_give(&data->tx_sem);
 		} else {
 			if (data->callback_isr) {
 				data->callback_isr(dev, sys_read8(cfg->base + PS20C_DATA_REG));
 			}
+			it51xxx_ps2_enable_wu_irq(dev, true);
+			enable_standby_state(true);
+#if DEBUG_GPIOA2
+			it51xxx_toggle_gpioa2();
+#endif
 		}
 	}
 }
