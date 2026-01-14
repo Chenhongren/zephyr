@@ -16,3 +16,7 @@
 
 	status = "okay";
 };
+
+&twd0 {
+	status = "okay";
+};

@@ -12,7 +12,7 @@
 #include <zephyr/logging/log.h>
 #define LOG_MODULE_NAME main
 
-LOG_MODULE_REGISTER();
+LOG_MODULE_REGISTER(main);
 
 #define TASK_STACK_SIZE 1024
 #define PRIORITY 7
@@ -82,100 +82,227 @@ static void to_port_60_thread(void *dummy1, void *dummy2, void *dummy3)
 }
 
 /* Commands expected from BIOS and Windows */
-void initialize_mouse(void)
+int initialize_mouse(void)
 {
+	int ret;
+
 	LOG_DBG("mouse->f4\n");
-	ps2_write(ps2_0_dev, 0xf4);
+	ret = ps2_write(ps2_0_dev, 0xf4);
+	if (ret) {
+		LOG_ERR("%d: ret %d", __LINE__, ret);
+		return ret;
+	}
 	k_msleep(MS_BETWEEN_REGULAR_CALLS);
 	LOG_DBG("Reset mouse->ff\n");
-	ps2_write(ps2_0_dev, 0xff);
+	ret = ps2_write(ps2_0_dev, 0xff);
+	if (ret) {
+		LOG_ERR("%d: ret %d", __LINE__, ret);
+		return ret;
+	}
 	k_msleep(MS_BETWEEN_RESET_CALLS);
 	LOG_DBG("Reset mouse->ff\n");
-	ps2_write(ps2_0_dev, 0xff);
+	ret = ps2_write(ps2_0_dev, 0xff);
+	if (ret) {
+		LOG_ERR("%d: ret %d", __LINE__, ret);
+		return ret;
+	}
 	k_msleep(MS_BETWEEN_RESET_CALLS);
 	LOG_DBG("Read ID mouse->f2\n");
-	ps2_write(ps2_0_dev, 0xf2);
+	ret = ps2_write(ps2_0_dev, 0xf2);
+	if (ret) {
+		LOG_ERR("%d: ret %d", __LINE__, ret);
+		return ret;
+	}
 	k_msleep(MS_BETWEEN_REGULAR_CALLS);
 	LOG_DBG("Set resolution mouse->e8\n");
-	ps2_write(ps2_0_dev, 0xe8);
+	ret = ps2_write(ps2_0_dev, 0xe8);
+	if (ret) {
+		LOG_ERR("%d: ret %d", __LINE__, ret);
+		return ret;
+	}
 	k_msleep(MS_BETWEEN_REGULAR_CALLS);
 	LOG_DBG("mouse->00\n");
-	ps2_write(ps2_0_dev, 0x00);
+	ret = ps2_write(ps2_0_dev, 0x00);
+	if (ret) {
+		LOG_ERR("%d: ret %d", __LINE__, ret);
+		return ret;
+	}
 	k_msleep(MS_BETWEEN_REGULAR_CALLS);
 	LOG_DBG("Set scaling 1:1 mouse->e6\n");
-	ps2_write(ps2_0_dev, 0xe6);
+	ret = ps2_write(ps2_0_dev, 0xe6);
+	if (ret) {
+		LOG_ERR("%d: ret %d", __LINE__, ret);
+		return ret;
+	}
 	k_msleep(MS_BETWEEN_REGULAR_CALLS);
 	LOG_DBG("Set scaling 1:1 mouse->e6\n");
-	ps2_write(ps2_0_dev, 0xe6);
+	ret = ps2_write(ps2_0_dev, 0xe6);
+	if (ret) {
+		LOG_ERR("%d: ret %d", __LINE__, ret);
+		return ret;
+	}
 	k_msleep(MS_BETWEEN_REGULAR_CALLS);
 	LOG_DBG("Set scaling 1:1 mouse->e6\n");
-	ps2_write(ps2_0_dev, 0xe6);
+	ret = ps2_write(ps2_0_dev, 0xe6);
+	if (ret) {
+		LOG_ERR("%d: ret %d", __LINE__, ret);
+		return ret;
+	}
 	k_msleep(MS_BETWEEN_REGULAR_CALLS);
 	LOG_DBG("mouse->e9\n");
-	ps2_write(ps2_0_dev, 0xe9);
+	ret = ps2_write(ps2_0_dev, 0xe9);
+	if (ret) {
+		LOG_ERR("%d: ret %d", __LINE__, ret);
+		return ret;
+	}
 	k_msleep(MS_BETWEEN_REGULAR_CALLS);
 	LOG_DBG("Set resolution mouse->e8\n");
-	ps2_write(ps2_0_dev, 0xe8);
+	ret = ps2_write(ps2_0_dev, 0xe8);
+	if (ret) {
+		LOG_ERR("%d: ret %d", __LINE__, ret);
+		return ret;
+	}
 	k_msleep(MS_BETWEEN_REGULAR_CALLS);
 	LOG_DBG("8 Counts/mm mouse->0x03\n");
-	ps2_write(ps2_0_dev, 0x03);
+	ret = ps2_write(ps2_0_dev, 0x03);
+	if (ret) {
+		LOG_ERR("%d: ret %d", __LINE__, ret);
+		return ret;
+	}
 	k_msleep(MS_BETWEEN_REGULAR_CALLS);
 	LOG_DBG("Set sample rate mouse->0xF3\n");
-	ps2_write(ps2_0_dev, 0xf3);
+	ret = ps2_write(ps2_0_dev, 0xf3);
+	if (ret) {
+		LOG_ERR("%d: ret %d", __LINE__, ret);
+		return ret;
+	}
 	k_msleep(MS_BETWEEN_REGULAR_CALLS);
 	LOG_DBG("decimal 200 ->0xc8\n");
-	ps2_write(ps2_0_dev, 0xc8);
+	ret = ps2_write(ps2_0_dev, 0xc8);
+	if (ret) {
+		LOG_ERR("%d: ret %d", __LINE__, ret);
+		return ret;
+	}
 	k_msleep(MS_BETWEEN_REGULAR_CALLS);
 	LOG_DBG("Set sample rate mouse->0xF3\n");
-	ps2_write(ps2_0_dev, 0xf3);
+	ret = ps2_write(ps2_0_dev, 0xf3);
+	if (ret) {
+		LOG_ERR("%d: ret %d", __LINE__, ret);
+		return ret;
+	}
 	k_msleep(MS_BETWEEN_REGULAR_CALLS);
 	LOG_DBG("decimal 100 ->0x64\n");
-	ps2_write(ps2_0_dev, 0x64);
+	ret = ps2_write(ps2_0_dev, 0x64);
+	if (ret) {
+		LOG_ERR("%d: ret %d", __LINE__, ret);
+		return ret;
+	}
 	LOG_DBG("Set sample rate mouse->0xF3\n");
-	ps2_write(ps2_0_dev, 0xf3);
+	ret = ps2_write(ps2_0_dev, 0xf3);
+	if (ret) {
+		LOG_ERR("%d: ret %d", __LINE__, ret);
+		return ret;
+	}
 	k_msleep(MS_BETWEEN_REGULAR_CALLS);
 	LOG_DBG("decimal 80 ->0x50\n");
-	ps2_write(ps2_0_dev, 0x50);
+	ret = ps2_write(ps2_0_dev, 0x50);
+	if (ret) {
+		LOG_ERR("%d: ret %d", __LINE__, ret);
+		return ret;
+	}
 	k_msleep(MS_BETWEEN_REGULAR_CALLS);
 	LOG_DBG("Read device type->0xf2\n");
-	ps2_write(ps2_0_dev, 0xf2);
+	ret = ps2_write(ps2_0_dev, 0xf2);
+	if (ret) {
+		LOG_ERR("%d: ret %d", __LINE__, ret);
+		return ret;
+	}
 	k_msleep(MS_BETWEEN_REGULAR_CALLS);
 	LOG_DBG("Set sample rate mouse->0xF3\n");
-	ps2_write(ps2_0_dev, 0xf3);
+	ret = ps2_write(ps2_0_dev, 0xf3);
+	if (ret) {
+		LOG_ERR("%d: ret %d", __LINE__, ret);
+		return ret;
+	}
 	k_msleep(MS_BETWEEN_REGULAR_CALLS);
 	LOG_DBG("decimal 200 ->0xc8\n");
-	ps2_write(ps2_0_dev, 0xc8);
+	ret = ps2_write(ps2_0_dev, 0xc8);
+	if (ret) {
+		LOG_ERR("%d: ret %d", __LINE__, ret);
+		return ret;
+	}
 	k_msleep(MS_BETWEEN_REGULAR_CALLS);
 	LOG_DBG("Set sample rate mouse->0xF3\n");
-	ps2_write(ps2_0_dev, 0xf3);
+	ret = ps2_write(ps2_0_dev, 0xf3);
+	if (ret) {
+		LOG_ERR("%d: ret %d", __LINE__, ret);
+		return ret;
+	}
 	k_msleep(MS_BETWEEN_REGULAR_CALLS);
 	LOG_DBG("decimal 200 ->0xc8\n");
-	ps2_write(ps2_0_dev, 0xc8);
+	ret = ps2_write(ps2_0_dev, 0xc8);
+	if (ret) {
+		LOG_ERR("%d: ret %d", __LINE__, ret);
+		return ret;
+	}
 	k_msleep(MS_BETWEEN_REGULAR_CALLS);
 	LOG_DBG("Set sample rate mouse->0xF3\n");
-	ps2_write(ps2_0_dev, 0xf3);
+	ret = ps2_write(ps2_0_dev, 0xf3);
+	if (ret) {
+		LOG_ERR("%d: ret %d", __LINE__, ret);
+		return ret;
+	}
 	k_msleep(MS_BETWEEN_REGULAR_CALLS);
 	LOG_DBG("decimal 80 ->0x50\n");
-	ps2_write(ps2_0_dev, 0x50);
+	ret = ps2_write(ps2_0_dev, 0x50);
+	if (ret) {
+		LOG_ERR("%d: ret %d", __LINE__, ret);
+		return ret;
+	}
 	k_msleep(MS_BETWEEN_REGULAR_CALLS);
 	LOG_DBG("Read device type->0xf2\n");
-	ps2_write(ps2_0_dev, 0xf2);
+	ret = ps2_write(ps2_0_dev, 0xf2);
+	if (ret) {
+		LOG_ERR("%d: ret %d", __LINE__, ret);
+		return ret;
+	}
 	k_msleep(MS_BETWEEN_REGULAR_CALLS);
 	LOG_DBG("Set sample rate mouse->0xF3\n");
-	ps2_write(ps2_0_dev, 0xf3);
+	ret = ps2_write(ps2_0_dev, 0xf3);
+	if (ret) {
+		LOG_ERR("%d: ret %d", __LINE__, ret);
+		return ret;
+	}
 	k_msleep(MS_BETWEEN_REGULAR_CALLS);
 	LOG_DBG("decimal 100 ->0x64\n");
-	ps2_write(ps2_0_dev, 0x64);
+	ret = ps2_write(ps2_0_dev, 0x64);
+	if (ret) {
+		LOG_ERR("%d: ret %d", __LINE__, ret);
+		return ret;
+	}
 	k_msleep(MS_BETWEEN_REGULAR_CALLS);
 	LOG_DBG("Set resolution mouse->e8\n");
-	ps2_write(ps2_0_dev, 0xe8);
+	ret = ps2_write(ps2_0_dev, 0xe8);
+	if (ret) {
+		LOG_ERR("%d: ret %d", __LINE__, ret);
+		return ret;
+	}
 	k_msleep(MS_BETWEEN_REGULAR_CALLS);
 	LOG_DBG("8 Counts/mm mouse->0x03\n");
-	ps2_write(ps2_0_dev, 0x03);
+	ret = ps2_write(ps2_0_dev, 0x03);
+	if (ret) {
+		LOG_ERR("%d: ret %d", __LINE__, ret);
+		return ret;
+	}
 	k_msleep(MS_BETWEEN_REGULAR_CALLS);
 	LOG_DBG("mouse->f4\n");
-	ps2_write(ps2_0_dev, 0xf4);
+	ret = ps2_write(ps2_0_dev, 0xf4);
+	if (ret) {
+		LOG_ERR("%d: ret %d", __LINE__, ret);
+		return ret;
+	}
 	k_msleep(MS_BETWEEN_REGULAR_CALLS);
+	return 0;
 }
 
 int main(void)
