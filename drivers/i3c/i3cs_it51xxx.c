@@ -128,6 +128,11 @@ LOG_MODULE_REGISTER(i3cs_it51xxx);
 #define IT51XXX_DIRECT_MODE_FIFO_SIZE 4096
 #define IT51XXX_I3CS_MAX_MRL_MWL      0xFFF /* 4095 bytes */
 
+#define MIPI_MID_ITE_TECH_INC    0x02FD
+#define MANUFACTURER_ID_MASK     GENMASK64(47, 33)
+#define GET_MANUFACTURER_ID(pid) FIELD_GET(MANUFACTURER_ID_MASK, (uint64_t)pid)
+#define GET_PART_NUMBER(pid)     FIELD_GET(GENMASK64(31, 0), (uint64_t)pid)
+
 enum it51xxx_i3cs_event_type {
 	EVT_NORMAL_MODE = 0,
 	EVT_IBI,
@@ -242,6 +247,18 @@ static inline void set_mwl_value(const struct device *dev, const uint16_t value)
 	sys_write8(BYTE_1(mwl), cfg->base + I3CS6B_MWL_SET_BY_CTRL_HB);
 }
 
+static inline void set_pid_part_number(const struct device *dev, const uint64_t pid)
+{
+	const struct it51xxx_i3cs_config *cfg = dev->config;
+	uint32_t pid_part_number = GET_PART_NUMBER(pid);
+
+	sys_write8(sys_read8(cfg->base + I3CS05_CONFIG_1) | ID_RANDOM, cfg->base + I3CS05_CONFIG_1);
+	sys_write8(BYTE_0(pid_part_number), cfg->base + I3CS6C_PRAT_NUMBER_0);
+	sys_write8(BYTE_1(pid_part_number), cfg->base + I3CS6D_PRAT_NUMBER_1);
+	sys_write8(BYTE_2(pid_part_number), cfg->base + I3CS6E_PRAT_NUMBER_2);
+	sys_write8(BYTE_3(pid_part_number), cfg->base + I3CS6F_PRAT_NUMBER_3);
+}
+
 static int it51xxx_i3cs_prepare_tx_fifo(const struct device *dev, uint8_t *buf, uint16_t len)
 {
 	const struct it51xxx_i3cs_config *cfg = dev->config;
@@ -340,6 +357,73 @@ static int it51xxx_i3cs_target_tx_write(const struct device *dev, uint8_t *buf, 
 	k_mutex_unlock(&data->lock);
 
 	return ret ? ret : len;
+}
+
+static int it51xxx_i3cs_configure(const struct device *dev, enum i3c_config_type type, void *config)
+{
+	const struct it51xxx_i3cs_config *cfg = dev->config;
+	struct it51xxx_i3cs_data *data = dev->data;
+	struct i3c_config_target *cfg_target = config;
+
+	if (config == NULL) {
+		LOG_INST_ERR(cfg->log, "config is null");
+		return -EINVAL;
+	}
+
+	if (type != I3C_CONFIG_TARGET) {
+		LOG_INST_ERR(cfg->log, "support target mode only");
+		return -ENOTSUP;
+	}
+
+	/* manufacturer id should be fixed as 02fd'h (ITE Tech. Inc.) */
+	if (cfg_target->pid == 0 || GET_MANUFACTURER_ID(cfg_target->pid) != MIPI_MID_ITE_TECH_INC) {
+		LOG_INST_ERR(cfg->log, "invalid pid (0x%#llx)", cfg_target->pid);
+		return -EINVAL;
+	}
+
+	if (cfg_target->supported_hdr) {
+		LOG_INST_ERR(cfg->log, "only supported sdr mode");
+		return -EINVAL;
+	}
+
+	if (cfg_target->max_write_len > sizeof(data->fifo.rx_data) ||
+	    cfg_target->max_read_len > sizeof(data->fifo.tx_data)) {
+		LOG_INST_ERR(cfg->log, "mwl or mrl exceeded (mwl=%u/%zu, mrl=%u/%zu)",
+			     cfg_target->max_write_len, sizeof(data->fifo.rx_data),
+			     cfg_target->max_read_len, sizeof(data->fifo.tx_data));
+		return -EINVAL;
+	}
+
+	k_mutex_lock(&data->lock, K_FOREVER);
+
+	set_pid_part_number(dev, cfg_target->pid);
+	LOG_INST_INF(cfg->log, "pid: %#llx", cfg_target->pid);
+
+	sys_write8(cfg_target->bcr, cfg->base + I3CS72_BCR);
+	sys_write8(cfg_target->dcr, cfg->base + I3CS71_DCR);
+	LOG_INST_INF(cfg->log, "bcr: %#x, dcr: %#x", cfg_target->bcr, cfg_target->dcr);
+
+	set_mwl_value(dev, cfg_target->max_write_len);
+	set_mrl_value(dev, cfg_target->max_read_len);
+	LOG_INST_INF(cfg->log, "mwl: %#x, mrl: %#x", cfg_target->max_write_len,
+		     cfg_target->max_read_len);
+
+	sys_write8(I3CS_TARGET_ADDRESS(cfg_target->static_addr), cfg->base + I3CS07_CONFIG_2);
+
+	cfg_target->enabled = true;
+
+	(void)memcpy(&data->config_target, cfg_target, sizeof(*cfg_target));
+
+	/* TODO
+	 * THINK: NEED TO SET DYNAMIC ADDRESS OR DYNAMIC ADDRESS
+	 * SHOULD BE SET BY CONTROLLER(DAA PROCESS)
+	 *
+	 * cfg_target->dynamic_addr
+	 */
+
+	k_mutex_unlock(&data->lock);
+
+	return 0;
 }
 
 static inline bool it51xxx_i3cs_dynamic_addr_valid(const struct device *dev)
@@ -567,14 +651,9 @@ static int it51xxx_i3cs_init(const struct device *dev)
 	sys_write8(cfg->vendor_info, cfg->base + I3CS0F_CONTROL_3);
 
 	/* set pid, bcr and dcr */
+	LOG_INST_INF(cfg->log, "pid: %#llx", config_target->pid);
 	if (config_target->pid_random) {
-		sys_write8(sys_read8(cfg->base + I3CS05_CONFIG_1) | ID_RANDOM,
-			   cfg->base + I3CS05_CONFIG_1);
-		sys_write8(BYTE_0(config_target->pid), cfg->base + I3CS6C_PRAT_NUMBER_0);
-		sys_write8(BYTE_1(config_target->pid), cfg->base + I3CS6D_PRAT_NUMBER_1);
-		sys_write8(BYTE_2(config_target->pid), cfg->base + I3CS6E_PRAT_NUMBER_2);
-		sys_write8(BYTE_3(config_target->pid), cfg->base + I3CS6F_PRAT_NUMBER_3);
-		LOG_INST_INF(cfg->log, "set pid random value: %#llx", config_target->pid);
+		set_pid_part_number(dev, config_target->pid);
 	}
 	if (I3C_BCR_DEVICE_ROLE(config_target->bcr) == I3C_BCR_DEVICE_ROLE_I3C_CONTROLLER_CAPABLE) {
 		LOG_INST_ERR(cfg->log, "i3cs doesn't support controller capability");
@@ -650,10 +729,13 @@ static int it51xxx_i3cs_init(const struct device *dev)
 
 	cfg->irq_config_func(dev);
 
+	config_target->enabled = true;
+
 	return 0;
 }
 
 static DEVICE_API(i3c, it51xxx_i3cs_api) = {
+	.configure = it51xxx_i3cs_configure,
 	.target_tx_write = it51xxx_i3cs_target_tx_write,
 	.target_register = it51xxx_i3cs_target_register,
 	.target_unregister = it51xxx_i3cs_target_unregister,
@@ -862,6 +944,16 @@ static void it51xxx_i3cs_isr(const struct device *dev)
 		.bit_mask = DT_INST_PROP_BY_IDX(n, extern_enable, 1),                              \
 	}
 
+/* TODO: NEED TO CHECK
+ * PID[31:0] : part number and instance is ?
+ */
+#define PID_TYPE_RANDOM_VALUE BIT64(32)
+#define IT51XXX_I3CS_PID(n) \
+	COND_CODE_1(DT_INST_NODE_HAS_PROP(n, pid_random_value), \
+		(FIELD_PREP(MANUFACTURER_ID_MASK, MIPI_MID_ITE_TECH_INC) | \
+		 PID_TYPE_RANDOM_VALUE | DT_INST_PROP(n, pid_random_value)), \
+		(FIELD_PREP(MANUFACTURER_ID_MASK, MIPI_MID_ITE_TECH_INC)))
+
 #define IT51XXX_I3CS_INIT(n)                                                                       \
 	LOG_INSTANCE_REGISTER(DT_NODE_FULL_NAME_TOKEN(DT_DRV_INST(n)), n,                          \
 			      CONFIG_I3C_IT51XXX_LOG_LEVEL);                                       \
@@ -882,11 +974,11 @@ static void it51xxx_i3cs_isr(const struct device *dev)
 		LOG_INSTANCE_PTR_INIT(log, DT_NODE_FULL_NAME_TOKEN(DT_DRV_INST(n)), n)};           \
 	static struct it51xxx_i3cs_data i3c_data_##n = {                                           \
 		.config_target.static_addr = DT_INST_PROP_OR(n, static_address, 0),                \
-		.config_target.pid = DT_INST_PROP_OR(n, pid_random_value, 0),                      \
+		.config_target.pid = IT51XXX_I3CS_PID(n),                                          \
 		.config_target.pid_random = DT_INST_NODE_HAS_PROP(n, pid_random_value),            \
 		.config_target.bcr = DT_INST_PROP_OR(n, bcr, 0x0F),                                \
 		.config_target.dcr = DT_INST_PROP_OR(n, dcr, 0),                                   \
-		.config_target.supported_hdr = false,                                              \
+		.config_target.supported_hdr = 0,                                                  \
 	};                                                                                         \
 	DEVICE_DT_INST_DEFINE(n, it51xxx_i3cs_init, NULL, &i3c_data_##n, &i3c_config_##n,          \
 			      POST_KERNEL, CONFIG_I3C_CONTROLLER_INIT_PRIORITY,                    \
