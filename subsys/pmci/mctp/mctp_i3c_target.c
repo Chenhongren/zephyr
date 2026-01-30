@@ -101,6 +101,22 @@ int mctp_i3c_target_start(struct mctp_binding *binding)
 		CONTAINER_OF(binding, struct mctp_binding_i3c_target, binding);
 	int rc;
 
+	/* Debug runtime target device configuration */
+	struct i3c_config_target i3c_cfg_target;
+	i3c_cfg_target.pid = 0x5fa00000011;
+	i3c_cfg_target.bcr = 0x06;
+	i3c_cfg_target.dcr = 0;
+	i3c_cfg_target.max_read_len = 256;
+	i3c_cfg_target.max_write_len = 256;
+	i3c_cfg_target.supported_hdr = 0;
+	i3c_cfg_target.static_addr = 0x18;
+
+	rc = i3c_configure_target(b->i3c, &i3c_cfg_target);
+	if (rc != 0) {
+		LOG_ERR("failed to configure i3c target");
+		goto out;
+	}
+
 	/* Register i3c target */
 	rc = i3c_target_register(b->i3c, &b->i3c_target_cfg);
 	if (rc != 0) {
