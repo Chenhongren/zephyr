@@ -2,6 +2,7 @@ tests:
   pmci.mctp.i3c.ping_pong:
     platform_allow:
       - npcx4m8f_evb
+      - it51xxx_evb/it51526aw
     tags:
       - mctp
       - i3c
