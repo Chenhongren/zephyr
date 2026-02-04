@@ -1,0 +1,16 @@
+
+/ {
+	hid_dev_0: hid_dev_0 {
+		compatible = "zephyr,hid-device";
+		label = "HID0";
+		protocol-code = "none";
+		in-polling-period-us = <1000>;
+		in-report-size = <64>;
+	};
+};
+
+zephyr_udc0: &usb0 {
+	status = "okay";
+	pinctrl-0 = <&usb0_dm_gpf4_default &usb0_dp_gpf5_default>;
+	pinctrl-names = "default";
+};

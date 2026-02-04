@@ -19,7 +19,7 @@
 #include <zephyr/usb/class/usbd_hid.h>
 
 #include <zephyr/logging/log.h>
-LOG_MODULE_REGISTER(main, LOG_LEVEL_INF);
+LOG_MODULE_REGISTER(main, LOG_LEVEL_DBG);
 
 static const struct gpio_dt_spec led0 = GPIO_DT_SPEC_GET(DT_ALIAS(led0), gpios);
 static const uint8_t hid_report_desc[] = HID_MOUSE_REPORT_DESC(2);
