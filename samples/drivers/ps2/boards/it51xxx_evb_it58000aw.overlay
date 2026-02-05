@@ -1,0 +1,41 @@
+/*
+ * Copyright (c) 2026 ITE Corporation. All Rights Reserved.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+/ {
+	aliases {
+		ps2-port0 = &ps2_0;
+	};
+};
+
+&ps2_0 {
+	pinctrl-0 = <&ps2_0_clk_gph3_default &ps2_0_data_gph4_default>;
+	pinctrl-names = "default";
+
+	clk-gpios = <&gpioh 3 0>;
+	data-gpios = <&gpioh 4 0>;
+
+	status = "okay";
+};
+
+&ps2_1 {
+	pinctrl-0 = <&ps2_1_clk_gpd0_default &ps2_1_data_gpd1_default>;
+	pinctrl-names = "default";
+
+	clk-gpios = <&gpiod 0 0>;
+	data-gpios = <&gpiod 1 0>;
+
+	status = "disabled";
+};
+
+&ps2_2 {
+	pinctrl-0 = <&ps2_2_clk_gpe0_default &ps2_2_data_gpe7_default>;
+	pinctrl-names = "default";
+
+	clk-gpios = <&gpioe 0 0>;
+	data-gpios = <&gpioe 7 0>;
+
+	status = "disabled";
+};
