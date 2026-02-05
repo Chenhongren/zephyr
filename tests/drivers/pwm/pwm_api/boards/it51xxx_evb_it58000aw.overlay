@@ -1,0 +1,6 @@
+
+/ {
+	aliases {
+		pwm-test = &pwm0;
+	};
+};

@@ -26,3 +26,4 @@ tests:
       - pic32cx_sg41_cult
       - sam_e54_xpro
       - pic32cm_jh01_cpro
+      - it51xxx_evb/it58000aw

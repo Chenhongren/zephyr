@@ -76,5 +76,8 @@ tests:
       - sam_e54_xpro
       - pic32cx_sg41_cult
   drivers.comparator.gpio_loopback.ite:
+    extra_args:
+      - CONFIG_ADC=y
     platform_allow:
       - it51xxx_evb/it51526aw
+      - it51xxx_evb/it58000aw
