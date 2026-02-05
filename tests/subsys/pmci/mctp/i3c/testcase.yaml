@@ -7,3 +7,20 @@ tests:
       - i3c
     harness_config:
       fixture: i3c_loopback
+  pmci.mctp.i3c.ping_pong.it51xxx:
+    platform_allow:
+      - it51xxx_evb/it51526aw
+      - it51xxx_evb/it58000aw
+    extra_configs:
+      - CONFIG_I3CS_TX_FIFO_4096_BYTE=y
+      - CONFIG_I3CS_RX_FIFO_4096_BYTE=y
+      - CONFIG_I3C_INIT_RSTACT=n
+      - CONFIG_I3CM_IT51XXX_DLM_SIZE=512
+    extra_args:
+      - DTC_OVERLAY_FILE="boards/it51xxx_evb_common.overlay"
+    tags:
+      - mctp
+      - i3c
+    harness_config:
+      fixture: i3c_loopback
+
