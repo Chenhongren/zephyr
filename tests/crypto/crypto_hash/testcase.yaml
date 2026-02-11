@@ -21,4 +21,5 @@ tests:
       - sama7g54_ek
       - nucleo_h753zi
       - sf32lb52_devkit_lcd
+      - it51xxx_evb/it58000aw
     tags: crypto

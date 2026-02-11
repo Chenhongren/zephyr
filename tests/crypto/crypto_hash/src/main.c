@@ -27,6 +27,8 @@
 #define CRYPTO_DEV_COMPAT sifli_sf32lb_crypto
 #elif DT_HAS_COMPAT_STATUS_OKAY(bflb_sec_eng_sha)
 #define CRYPTO_DEV_COMPAT bflb_sec_eng_sha
+#elif DT_HAS_COMPAT_STATUS_OKAY(ite_it51xxx_sha)
+#define CRYPTO_DEV_COMPAT ite_it51xxx_sha
 #else
 #error "You need to enable one crypto device"
 #endif
