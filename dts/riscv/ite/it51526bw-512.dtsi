@@ -4,6 +4,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+#include <ite/it51xxx.dtsi>
+
 / {
 	soc {
 		flashctrl: flash-controller@f01000 {
