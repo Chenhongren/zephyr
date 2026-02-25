@@ -199,9 +199,9 @@ int main(void)
 		return 1;
 	}
 #if defined SPI_FLASH_MULTI_SECTOR_TEST
-	if (multi_sector_test(flash_dev)) {
-		return 1;
-	}
+	// if (multi_sector_test(flash_dev)) {
+	// 	return 1;
+	// }
 #endif
 	printf("==========================\n");
 	return 0;

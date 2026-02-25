@@ -1,0 +1,27 @@
+# Copyright (c) 2024 ITE Corporation. All Rights Reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+description: IT8XXX2 MSPI
+
+compatible: "ite,it8xxx2-mspi"
+
+include: [mspi-controller.yaml, pinctrl-device.yaml]
+
+properties:
+  reg:
+    required: true
+
+  interrupts:
+    required: true
+
+  pinctrl-0:
+    required: true
+
+  pinctrl-names:
+    required: true
+
+  op-mode:
+    default: "MSPI_OP_MODE_CONTROLLER"
+
+  duplex:
+    default: "MSPI_HALF_DUPLEX"

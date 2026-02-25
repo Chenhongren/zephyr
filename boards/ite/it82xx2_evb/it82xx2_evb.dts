@@ -16,7 +16,7 @@
 	aliases {
 		i2c-0 = &i2c0;
 		peci-0 = &peci0;
-		led0 = &led0;
+		//led0 = &led0;
 		watchdog0 = &twd0;
 		pwm-0 = &pwm0;
 	};
@@ -30,6 +30,7 @@
 		zephyr,flash-controller = &flashctrl;
 	};
 
+/*
 	leds {
 		compatible = "gpio-leds";
 
@@ -38,6 +39,7 @@
 			label = "Green LED";
 		};
 	};
+*/
 };
 
 &adc0 {
@@ -164,7 +166,10 @@
 };
 
 &kbd {
+/*
 	status = "okay";
+*/
+	status = "disabled";
 	pinctrl-0 = <&ksi0_default
 		     &ksi1_default
 		     &ksi2_default
