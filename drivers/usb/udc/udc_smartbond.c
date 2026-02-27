@@ -4,8 +4,6 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-#error This UDC driver has to be adapted to new control transfer handling
-
 /*
  * Driver for the Smartbond USB device controller.
  */
@@ -617,6 +615,15 @@ static int udc_smartbond_ep_enqueue(const struct device *dev, struct udc_ep_conf
 	LOG_DBG("ep 0x%02x enqueue %p", ep, buf);
 	udc_buf_put(ep_cfg, buf);
 
+	if (ep_cfg->addr == USB_CONTROL_EP_OUT) {
+		struct udc_buf_info *bi = udc_get_buf_info(buf);
+
+		if (bi->setup) {
+			/* SETUP can be received without any action */
+			return 0;
+		}
+	}
+
 	if (ep_cfg->stat.halted) {
 		/*
 		 * It is fine to enqueue a transfer for a halted endpoint,
@@ -724,20 +731,12 @@ static int udc_smartbond_ep_disable(const struct device *dev, struct udc_ep_conf
 static int udc_smartbond_ep_set_halt(const struct device *dev, struct udc_ep_config *const ep_cfg)
 {
 	struct smartbond_ep_state *ep_state = (struct smartbond_ep_state *)(ep_cfg);
-	struct net_buf *buf;
 	const uint8_t ep = ep_cfg->addr;
 
 	LOG_DBG("Set halt ep 0x%02x", ep);
 
 	ep_cfg->stat.halted = 1;
 	if (ep_cfg->addr == USB_CONTROL_EP_IN) {
-		/* Stall in DATA IN phase, drop status OUT packet */
-		if (udc_ctrl_stage_is_data_in(dev)) {
-			buf = udc_buf_get(udc_get_ep_cfg(dev, USB_CONTROL_EP_OUT));
-			if (buf) {
-				net_buf_unref(buf);
-			}
-		}
 		USB->USB_RXC0_REG = USB_USB_RXC0_REG_USB_FLUSH_Msk;
 		USB->USB_EPC0_REG |= USB_USB_EPC0_REG_USB_STALL_Msk;
 		USB->USB_TXC0_REG |= USB_USB_TXC0_REG_USB_TX_EN_Msk;
@@ -1166,22 +1165,6 @@ static void handle_ep0_nak(struct usb_smartbond_data *data)
 	}
 }
 
-static void empty_ep0_queues(const struct device *dev)
-{
-	struct udc_ep_config *cfg_out = udc_get_ep_cfg(dev, USB_CONTROL_EP_OUT);
-	struct udc_ep_config *cfg_in = udc_get_ep_cfg(dev, USB_CONTROL_EP_IN);
-	struct net_buf *buf;
-
-	buf = udc_buf_get_all(cfg_out);
-	if (buf) {
-		net_buf_unref(buf);
-	}
-	buf = udc_buf_get_all(cfg_in);
-	if (buf) {
-		net_buf_unref(buf);
-	}
-}
-
 static void handle_bus_reset(struct usb_smartbond_data *data)
 {
 	const struct udc_smartbond_config *config = data->dev->config;
@@ -1211,7 +1194,6 @@ static void handle_bus_reset(struct usb_smartbond_data *data)
 	USB->USB_ALTMSK_REG = USB_USB_ALTMSK_REG_USB_M_RESUME_Msk;
 	alt_ev = USB->USB_ALTEV_REG;
 	check_reset_end(data, alt_ev);
-	empty_ep0_queues(data->dev);
 }
 
 static void usb_clock_on(struct usb_smartbond_data *data)
@@ -1418,41 +1400,6 @@ static void usb_dc_smartbond_vbus_isr(struct usb_smartbond_data *data)
 				 0);
 }
 
-static int usb_dc_smartbond_alloc_status_out(const struct device *dev)
-{
-
-	struct udc_ep_config *const ep_cfg = udc_get_ep_cfg(dev, USB_CONTROL_EP_OUT);
-	struct net_buf *buf;
-
-	buf = udc_ctrl_alloc(dev, USB_CONTROL_EP_OUT, 0);
-	if (buf == NULL) {
-		return -ENOMEM;
-	}
-
-	k_fifo_put(&ep_cfg->fifo, buf);
-
-	return 0;
-}
-
-static int usbd_ctrl_feed_dout(const struct device *dev, const size_t length)
-{
-	struct usb_smartbond_data *data = udc_get_private(dev);
-	struct smartbond_ep_state *ep_state = EP0_OUT_STATE(data);
-	struct udc_ep_config *const ep_cfg = &ep_state->config;
-	struct net_buf *buf;
-
-	buf = udc_ctrl_alloc(dev, USB_CONTROL_EP_OUT, length);
-	if (buf == NULL) {
-		return -ENOMEM;
-	}
-
-	k_fifo_put(&ep_cfg->fifo, buf);
-	ep_state->buf = buf;
-	start_rx_packet(data, ep_state);
-
-	return 0;
-}
-
 static void handle_ep0_rx_work(struct k_work *item)
 {
 	struct usb_smartbond_data *data =
@@ -1477,23 +1424,15 @@ static void handle_ep0_rx_work(struct k_work *item)
 		LOG_ERR("ep 0x%02x queue is empty", ep);
 		return;
 	}
-	/* Update packet size */
-	if (udc_ctrl_stage_is_status_out(dev)) {
-		udc_ctrl_update_stage(dev, buf);
-		udc_ctrl_submit_status(dev, buf);
-	} else {
-		udc_ctrl_update_stage(dev, buf);
-	}
 
-	if (udc_ctrl_stage_is_status_in(dev)) {
-		udc_ctrl_submit_s_out_status(dev, buf);
-	}
+	udc_submit_ep_event(dev, buf, 0);
 }
 
 static void handle_ep0_tx_work(struct k_work *item)
 {
 	struct usb_smartbond_data *data =
 		CONTAINER_OF(item, struct usb_smartbond_data, ep0_tx_work);
+	struct udc_buf_info *bi;
 	struct net_buf *buf;
 	const struct device *dev = data->dev;
 	const uint8_t ep = USB_CONTROL_EP_IN;
@@ -1519,18 +1458,8 @@ static void handle_ep0_tx_work(struct k_work *item)
 
 	__ASSERT(buf == EP0_IN_STATE(data)->buf, "Internal error");
 
-	/* For control endpoint get ready for ACK stage
-	 * from host.
-	 */
-	if (udc_ctrl_stage_is_status_in(dev) || udc_ctrl_stage_is_no_data(dev)) {
-		/* Status stage finished, notify upper layer */
-		udc_ctrl_submit_status(dev, buf);
-	}
-
-	/* Update to next stage of control transfer */
-	udc_ctrl_update_stage(dev, buf);
-
-	if (udc_ctrl_stage_is_status_out(dev)) {
+	bi = udc_get_buf_info(buf);
+	if (bi->data) {
 		/*
 		 * Flush TX FIFO in case host already send status OUT packet
 		 * and is not interested in reading from IN endpoint
@@ -1538,56 +1467,23 @@ static void handle_ep0_tx_work(struct k_work *item)
 		USB->USB_TXC0_REG = USB_USB_TXC0_REG_USB_FLUSH_Msk;
 		/* Enable reception of status OUT packet */
 		REG_SET_BIT(USB_RXC0_REG, USB_RX_EN);
-		/*
-		 * IN transfer finished, release buffer,
-		 */
-		net_buf_unref(buf);
 	}
+
+	udc_submit_ep_event(dev, buf, 0);
 }
 
 static void handle_ep0_setup_work(struct k_work *item)
 {
 	struct usb_smartbond_data *data =
 		CONTAINER_OF(item, struct usb_smartbond_data, ep0_setup_work);
-	struct net_buf *buf;
-	int err;
 	const struct device *dev = data->dev;
 	struct smartbond_ep_state *ep0_out_state;
 
-	buf = udc_ctrl_alloc(dev, USB_CONTROL_EP_OUT, sizeof(struct usb_setup_packet));
-	if (buf == NULL) {
-		LOG_ERR("Failed to allocate for setup");
-		return;
-	}
-
-	udc_ep_buf_set_setup(buf);
-	net_buf_add_mem(buf, data->setup_buffer, 8);
 	ep0_out_state = EP0_OUT_STATE(data);
 	ep0_out_state->last_packet_size = 0;
 	ep0_out_state->buf = NULL;
-	udc_ctrl_update_stage(dev, buf);
 
-	if (udc_ctrl_stage_is_data_out(dev)) {
-		/*  Allocate and feed buffer for data OUT stage */
-		LOG_DBG("s:%p|feed for -out-", buf);
-		err = usbd_ctrl_feed_dout(dev, udc_data_stage_length(buf));
-		if (err == -ENOMEM) {
-			err = udc_submit_ep_event(dev, buf, err);
-		}
-	} else if (udc_ctrl_stage_is_data_in(dev)) {
-		/* Allocate buffer for Status OUT state */
-		err = usb_dc_smartbond_alloc_status_out(dev);
-		if (err == -ENOMEM) {
-			err = udc_submit_ep_event(dev, buf, err);
-		} else {
-			err = udc_ctrl_submit_s_in_status(dev);
-			if (err == -ENOMEM) {
-				err = udc_submit_ep_event(dev, buf, err);
-			}
-		}
-	} else {
-		err = udc_ctrl_submit_s_status(dev);
-	}
+	udc_setup_received(dev, data->setup_buffer, true);
 }
 
 static int udc_smartbond_enable(const struct device *dev)
