@@ -4,8 +4,6 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-#error This UDC driver has to be adapted to new control transfer handling
-
 #include "udc_common.h"
 
 #include <soc.h>
@@ -482,6 +480,15 @@ static int it82xx2_ep_enqueue(const struct device *dev, struct udc_ep_config *co
 {
 	udc_buf_put(cfg, buf);
 
+	if (cfg->addr == USB_CONTROL_EP_OUT) {
+		struct udc_buf_info *bi = udc_get_buf_info(buf);
+
+		if (bi->setup) {
+			/* SETUP can be received without any action */
+			return 0;
+		}
+	}
+
 	it82xx2_event_submit(dev, cfg->addr, IT82xx2_EVT_XFER);
 	return 0;
 }
@@ -873,26 +880,6 @@ static int work_handler_xfer_next(const struct device *dev,
 	return work_handler_xfer_continue(dev, ep_cfg->addr, buf);
 }
 
-/*
- * Allocate buffer and initiate a new control OUT transfer,
- * use successive buffer descriptor when next is true.
- */
-static int it82xx2_ctrl_feed_dout(const struct device *dev, const size_t length)
-{
-	struct udc_ep_config *cfg = udc_get_ep_cfg(dev, USB_CONTROL_EP_OUT);
-	struct net_buf *buf;
-
-	buf = udc_ctrl_alloc(dev, USB_CONTROL_EP_OUT, length);
-	if (buf == NULL) {
-		return -ENOMEM;
-	}
-	udc_buf_put(cfg, buf);
-
-	it82xx2_usb_set_ep_ctrl(dev, 0, EP_READY_ENABLE, true);
-
-	return 0;
-}
-
 static bool get_extend_enable_bit(const struct device *dev, const uint8_t ep_idx)
 {
 	union epn_extend_ctrl1_reg *epn_ext_ctrl1 = NULL;
@@ -937,9 +924,7 @@ static bool it82xx2_fake_token(const struct device *dev, const uint8_t ep, const
 			if (priv->stall_is_sent) {
 				return true;
 			}
-			is_fake = !udc_ctrl_stage_is_data_in(dev) &&
-				  !udc_ctrl_stage_is_status_in(dev) &&
-				  !udc_ctrl_stage_is_no_data(dev);
+			/* FIXME: no idea what this fake token is all about */
 		} else {
 			if (get_fifo_ctrl(dev, fifo_idx) != BIT(ep_idx)) {
 				is_fake = true;
@@ -948,8 +933,7 @@ static bool it82xx2_fake_token(const struct device *dev, const uint8_t ep, const
 		break;
 	case DC_OUTDATA_TRANS:
 		if (ep_idx == 0) {
-			is_fake = !udc_ctrl_stage_is_data_out(dev) &&
-				  !udc_ctrl_stage_is_status_out(dev);
+			/* FIXME: no idea what this fake token is all about */
 		} else {
 			if (!atomic_test_bit(&priv->out_fifo_state,
 					     IT82xx2_STATE_OUT_SHARED_FIFO_BUSY)) {
@@ -972,7 +956,6 @@ static inline int work_handler_in(const struct device *dev, uint8_t ep)
 	struct udc_ep_config *ep_cfg;
 	struct net_buf *buf;
 	uint8_t fifo_idx;
-	int err = 0;
 
 	if (it82xx2_fake_token(dev, ep, DC_IN_TRANS)) {
 		return 0;
@@ -1013,87 +996,39 @@ static inline int work_handler_in(const struct device *dev, uint8_t ep)
 
 	udc_ep_set_busy(ep_cfg, false);
 
-	if (ep == USB_CONTROL_EP_IN) {
-		if (udc_ctrl_stage_is_status_in(dev) || udc_ctrl_stage_is_no_data(dev)) {
-			/* Status stage finished, notify upper layer */
-			udc_ctrl_submit_status(dev, buf);
-		}
-
-		/* Update to next stage of control transfer */
-		udc_ctrl_update_stage(dev, buf);
-
-		if (udc_ctrl_stage_is_status_out(dev)) {
-			/*
-			 * IN transfer finished, release buffer,
-			 * Feed control OUT buffer for status stage.
-			 */
-			net_buf_unref(buf);
-			err = it82xx2_ctrl_feed_dout(dev, 0U);
-		}
-		return err;
-	}
-
 	return udc_submit_ep_event(dev, buf, 0);
 }
 
 static inline int work_handler_setup(const struct device *dev, uint8_t ep)
 {
+	const struct usb_it82xx2_config *config = dev->config;
+	struct usb_it82xx2_regs *const usb_regs = config->base;
+	struct it82xx2_usb_ep_regs *ep_regs = usb_regs->usb_ep_regs;
+	struct it82xx2_usb_ep_fifo_regs *ff_regs = usb_regs->fifo_regs;
 	struct it82xx2_data *priv = udc_get_private(dev);
-	struct net_buf *buf;
-	int err = 0;
+	uint8_t setup[sizeof(struct usb_setup_packet)];
+	size_t len;
 
-	if (udc_ctrl_stage_is_status_out(dev)) {
-		struct udc_ep_config *cfg_out;
+	if (ep_regs[0].ep_status & EP_STATUS_ERROR) {
+		LOG_WRN("EP0 error status 0x%02x", ep_regs[0].ep_status);
+		return -EINVAL;
+	}
 
-		/* out -> setup */
-		cfg_out = udc_get_ep_cfg(dev, USB_CONTROL_EP_OUT);
-		buf = udc_buf_get(cfg_out);
-		if (buf) {
-			udc_ep_set_busy(cfg_out, false);
-			net_buf_unref(buf);
+	len = (uint16_t)ff_regs[0].ep_rx_fifo_dcnt_lsb +
+	      (((uint16_t)ff_regs[0].ep_rx_fifo_dcnt_msb) << 8);
+
+	if (len == sizeof(struct usb_setup_packet)) {
+		for (size_t idx = 0; idx < len; idx++) {
+			setup[idx] = ff_regs[0].ep_rx_fifo_data;
 		}
-	}
-
-	if (udc_ctrl_stage_is_status_in(dev) || udc_ctrl_stage_is_no_data(dev)) {
-		/* in -> setup */
-		work_handler_in(dev, USB_CONTROL_EP_IN);
-	}
-
-	buf = udc_ctrl_alloc(dev, USB_CONTROL_EP_OUT, sizeof(struct usb_setup_packet));
-	if (buf == NULL) {
-		LOG_ERR("Failed to allocate buffer");
-		return -ENOMEM;
-	}
-
-	udc_ep_buf_set_setup(buf);
-	it82xx2_xfer_out_data(dev, ep, buf);
-	if (buf->len != sizeof(struct usb_setup_packet)) {
-		LOG_DBG("buffer length %d read from chip", buf->len);
-		net_buf_unref(buf);
-		return 0;
 	}
 
 	priv->stall_is_sent = false;
-	LOG_HEXDUMP_DBG(buf->data, buf->len, "setup:");
+	it82xx2_usb_set_ep_ctrl(dev, USB_CONTROL_EP_OUT, EP_DATA_SEQ_1, true);
 
-	udc_ctrl_update_stage(dev, buf);
+	udc_setup_received(dev, setup, len == sizeof(struct usb_setup_packet));
 
-	it82xx2_usb_set_ep_ctrl(dev, ep, EP_DATA_SEQ_1, true);
-
-	if (udc_ctrl_stage_is_data_out(dev)) {
-		/* Allocate and feed buffer for data OUT stage */
-		LOG_DBG("s:%p|feed for -out-", buf);
-		err = it82xx2_ctrl_feed_dout(dev, udc_data_stage_length(buf));
-		if (err == -ENOMEM) {
-			err = udc_submit_ep_event(dev, buf, err);
-		}
-	} else if (udc_ctrl_stage_is_data_in(dev)) {
-		udc_ctrl_submit_s_in_status(dev);
-	} else {
-		udc_ctrl_submit_s_status(dev);
-	}
-
-	return err;
+	return 0;
 }
 
 static inline int work_handler_out(const struct device *dev, uint8_t ep)
@@ -1123,18 +1058,6 @@ static inline int work_handler_out(const struct device *dev, uint8_t ep)
 	len = (uint16_t)ff_regs[fifo_idx].ep_rx_fifo_dcnt_lsb +
 	      (((uint16_t)ff_regs[fifo_idx].ep_rx_fifo_dcnt_msb) << 8);
 
-	if (ep == USB_CONTROL_EP_OUT) {
-		if (udc_ctrl_stage_is_status_out(dev) && len != 0) {
-			LOG_DBG("Handle early setup token");
-			buf = udc_buf_get(ep_cfg);
-			/* Notify upper layer */
-			udc_ctrl_submit_status(dev, buf);
-			/* Update to next stage of control transfer */
-			udc_ctrl_update_stage(dev, buf);
-			return 0;
-		}
-	}
-
 	if (len > udc_mps_ep_size(ep_cfg)) {
 		LOG_ERR("Failed to handle this packet due to the packet size");
 		return -ENOBUFS;
@@ -1159,23 +1082,11 @@ static inline int work_handler_out(const struct device *dev, uint8_t ep)
 
 	udc_ep_set_busy(ep_cfg, false);
 
-	if (ep == USB_CONTROL_EP_OUT) {
-		if (udc_ctrl_stage_is_status_out(dev)) {
-			/* Status stage finished, notify upper layer */
-			udc_ctrl_submit_status(dev, buf);
-		}
-
-		/* Update to next stage of control transfer */
-		udc_ctrl_update_stage(dev, buf);
-
-		if (udc_ctrl_stage_is_status_in(dev)) {
-			it82xx2_usb_set_ep_ctrl(dev, ep, EP_DATA_SEQ_1, true);
-			err = udc_ctrl_submit_s_out_status(dev, buf);
-		}
-	} else {
+	if (ep != USB_CONTROL_EP_OUT) {
 		atomic_clear_bit(&priv->out_fifo_state, IT82xx2_STATE_OUT_SHARED_FIFO_BUSY);
-		err = udc_submit_ep_event(dev, buf, 0);
 	}
+
+	err = udc_submit_ep_event(dev, buf, 0);
 
 	return err;
 }
@@ -1202,6 +1113,9 @@ static void xfer_work_handler(const struct device *dev)
 			err = work_handler_out(evt.dev, evt.ep);
 			break;
 		case IT82xx2_EVT_XFER:
+			if (evt.ep == USB_CONTROL_EP_OUT) {
+				it82xx2_usb_set_ep_ctrl(dev, 0, EP_READY_ENABLE, true);
+			}
 			break;
 		default:
 			LOG_ERR("Unknown event type 0x%x", evt.event);
