@@ -307,6 +307,8 @@ struct usbd_context {
 	void *fs_desc;
 	/** Pointer to High-Speed device descriptor */
 	void *hs_desc;
+	/** Pre-allocated buffer for control transfer SETUP stage */
+	struct net_buf *setup_buf;
 };
 
 /**

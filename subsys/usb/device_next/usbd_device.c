@@ -293,6 +293,19 @@ int usbd_enable(struct usbd_context *const uds_ctx)
 		goto enable_exit;
 	}
 
+	/* SETUP buffer allocation must not fail. Ensure SETUP buffer is always
+	 * available by pre-allocating it. USB stack effectively resubmits the
+	 * same buffer after each control transfer. This ensures that SETUP
+	 * stage can always be received regardless of UDC memory usage.
+	 */
+	uds_ctx->setup_buf = udc_ctrl_setup_alloc(uds_ctx->dev);
+	if (uds_ctx->setup_buf == NULL) {
+		LOG_ERR("Failed to allocate SETUP buffer");
+		udc_disable(uds_ctx->dev);
+		ret = -ENOMEM;
+		goto enable_exit;
+	}
+
 	ret = usbd_init_control_pipe(uds_ctx);
 	if (ret != 0) {
 		udc_disable(uds_ctx->dev);
@@ -328,6 +341,10 @@ int usbd_disable(struct usbd_context *const uds_ctx)
 	if (ret) {
 		LOG_ERR("Failed to disable USB device");
 	}
+
+	/* Release reference to pre-allocated setup buffer */
+	net_buf_unref(uds_ctx->setup_buf);
+	uds_ctx->setup_buf = NULL;
 
 	uds_ctx->status.enabled = false;
 
