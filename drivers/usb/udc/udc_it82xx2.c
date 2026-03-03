@@ -483,8 +483,13 @@ static int it82xx2_ep_enqueue(const struct device *dev, struct udc_ep_config *co
 	if (cfg->addr == USB_CONTROL_EP_OUT) {
 		struct udc_buf_info *bi = udc_get_buf_info(buf);
 
-		if (bi->setup) {
-			/* SETUP can be received without any action */
+		if (bi->setup || bi->status) {
+			/* SETUP can be received without any action.
+			 * The OUT buffer is enqueued before the data-in stage finishes.
+			 * To prevent missing OUT status, firmware enables the ready bit
+			 * in `work_handler_in` instead of doing so after enqueuing the
+			 * OUT status buffer.
+			 */
 			return 0;
 		}
 	}
@@ -770,6 +775,9 @@ static int it82xx2_xfer_in_data(const struct device *dev, uint8_t ep, struct net
 	fifo_idx = ep_idx > 0 ? ep_fifo_res[ep_idx % SHARED_FIFO_NUM] : 0;
 	if (ep_idx == 0) {
 		ff_regs[ep_idx].ep_tx_fifo_ctrl = FIFO_FORCE_EMPTY;
+		if (udc_get_buf_info(buf)->status) {
+			it82xx2_usb_set_ep_ctrl(dev, ep, EP_DATA_SEQ_1, true);
+		}
 	} else {
 		k_sem_take(&priv->fifo_sem[fifo_idx - 1], K_FOREVER);
 		key = irq_lock();
@@ -792,7 +800,8 @@ static int it82xx2_xfer_in_data(const struct device *dev, uint8_t ep, struct net
 	return 0;
 }
 
-static int it82xx2_xfer_out_data(const struct device *dev, uint8_t ep, struct net_buf *buf)
+static int it82xx2_xfer_out_data(const struct device *dev, uint8_t ep, struct net_buf *buf,
+				 size_t len)
 {
 	const struct usb_it82xx2_config *config = dev->config;
 	struct usb_it82xx2_regs *const usb_regs = config->base;
@@ -800,7 +809,6 @@ static int it82xx2_xfer_out_data(const struct device *dev, uint8_t ep, struct ne
 	struct it82xx2_usb_ep_fifo_regs *ff_regs = usb_regs->fifo_regs;
 	const uint8_t ep_idx = USB_EP_GET_IDX(ep);
 	uint8_t fifo_idx;
-	size_t len;
 
 	fifo_idx = ep_idx > 0 ? ep_fifo_res[ep_idx % SHARED_FIFO_NUM] : 0;
 	if (ep_regs[fifo_idx].ep_status & EP_STATUS_ERROR) {
@@ -808,10 +816,8 @@ static int it82xx2_xfer_out_data(const struct device *dev, uint8_t ep, struct ne
 		return -EINVAL;
 	}
 
-	len = (uint16_t)ff_regs[fifo_idx].ep_rx_fifo_dcnt_lsb +
-	      (((uint16_t)ff_regs[fifo_idx].ep_rx_fifo_dcnt_msb) << 8);
-
 	len = MIN(net_buf_tailroom(buf), len);
+
 	uint8_t *data_ptr = net_buf_tail(buf);
 
 	for (size_t idx = 0; idx < len; idx++) {
@@ -918,13 +924,26 @@ static bool it82xx2_fake_token(const struct device *dev, const uint8_t ep, const
 
 	fifo_idx = ep_idx > 0 ? ep_fifo_res[ep_idx % SHARED_FIFO_NUM] : 0;
 
+	/* On xfer_done interrupt, the firmware polls all four fifos to identify the completed
+	 * endpoint. Because hardware doesn't clear the xfer_done flags (enabled but not ready) or
+	 * transfer type, stale transfer type information may persist. As a result, endpoint fifo
+	 * may be falsely detected as having completed transfer.
+	 *
+	 * To prevent this for the control endpoint fifo(fifo 0), we use the presence of a buffer to
+	 * filter in and out fake tokens. For shared fifos(fifo1 to 3 are shared among ep1 to 15),
+	 * firmware checks fifo control register for in fifo and the `SHARE_FIFO_BUSY` bit for out
+	 * fifos.
+	 */
 	switch (token_type) {
 	case DC_IN_TRANS:
 		if (ep_idx == 0) {
+			struct udc_ep_config *ep_cfg;
+
 			if (priv->stall_is_sent) {
 				return true;
 			}
-			/* FIXME: no idea what this fake token is all about */
+			ep_cfg = udc_get_ep_cfg(dev, USB_CONTROL_EP_IN);
+			is_fake = udc_buf_peek(ep_cfg) ? false : true;
 		} else {
 			if (get_fifo_ctrl(dev, fifo_idx) != BIT(ep_idx)) {
 				is_fake = true;
@@ -933,7 +952,16 @@ static bool it82xx2_fake_token(const struct device *dev, const uint8_t ep, const
 		break;
 	case DC_OUTDATA_TRANS:
 		if (ep_idx == 0) {
-			/* FIXME: no idea what this fake token is all about */
+			struct udc_ep_config *ep_cfg = udc_get_ep_cfg(dev, USB_CONTROL_EP_OUT);
+			struct net_buf *buf = udc_buf_peek(ep_cfg);
+
+			if (!buf) {
+				return true;
+			}
+
+			if (udc_get_buf_info(buf)->setup) {
+				is_fake = true;
+			}
 		} else {
 			if (!atomic_test_bit(&priv->out_fifo_state,
 					     IT82xx2_STATE_OUT_SHARED_FIFO_BUSY)) {
@@ -996,6 +1024,15 @@ static inline int work_handler_in(const struct device *dev, uint8_t ep)
 
 	udc_ep_set_busy(ep_cfg, false);
 
+	if (ep == USB_CONTROL_EP_IN) {
+		struct udc_buf_info *bi = udc_get_buf_info(buf);
+
+		if (bi->data) {
+			/* set ready bit for out status stage */
+			it82xx2_usb_set_ep_ctrl(dev, 0, EP_READY_ENABLE, true);
+		}
+	}
+
 	return udc_submit_ep_event(dev, buf, 0);
 }
 
@@ -1017,11 +1054,15 @@ static inline int work_handler_setup(const struct device *dev, uint8_t ep)
 	len = (uint16_t)ff_regs[0].ep_rx_fifo_dcnt_lsb +
 	      (((uint16_t)ff_regs[0].ep_rx_fifo_dcnt_msb) << 8);
 
-	if (len == sizeof(struct usb_setup_packet)) {
-		for (size_t idx = 0; idx < len; idx++) {
-			setup[idx] = ff_regs[0].ep_rx_fifo_data;
-		}
+	if (len != sizeof(struct usb_setup_packet)) {
+		LOG_DBG("setup: %d bytes read from chip", len);
+		return 0;
 	}
+
+	for (size_t idx = 0; idx < len; idx++) {
+		setup[idx] = ff_regs[0].ep_rx_fifo_data;
+	}
+	LOG_HEXDUMP_DBG(setup, len, "setup:");
 
 	priv->stall_is_sent = false;
 	it82xx2_usb_set_ep_ctrl(dev, USB_CONTROL_EP_OUT, EP_DATA_SEQ_1, true);
@@ -1063,7 +1104,18 @@ static inline int work_handler_out(const struct device *dev, uint8_t ep)
 		return -ENOBUFS;
 	}
 
-	it82xx2_xfer_out_data(dev, ep, buf);
+	if (ep == USB_CONTROL_EP_OUT) {
+		if (udc_get_buf_info(buf)->status && len != 0) {
+			LOG_DBG("handle early setup token, %d", len);
+			buf = udc_buf_get(ep_cfg);
+			return udc_submit_ep_event(dev, buf, 0);
+		}
+	}
+
+	err = it82xx2_xfer_out_data(dev, ep, buf, len);
+	if (err) {
+		return err;
+	}
 
 	LOG_DBG("Handle data OUT, %zu | %zu", len, net_buf_tailroom(buf));
 
