@@ -1,0 +1,33 @@
+#include <zephyr/dt-bindings/input/input-event-codes.h>
+
+/ {
+	buttons {
+		compatible = "gpio-keys";
+
+		button_0 {
+			gpios = <&gpioa 0 (GPIO_PULL_UP | GPIO_ACTIVE_LOW)>;
+			zephyr,code = <INPUT_KEY_0>;
+		};
+		button_1 {
+			gpios = <&gpioa 1 (GPIO_PULL_UP | GPIO_ACTIVE_LOW)>;
+			zephyr,code = <INPUT_KEY_1>;
+		};
+		button_2 {
+			gpios = <&gpioa 2 (GPIO_PULL_UP | GPIO_ACTIVE_LOW)>;
+			zephyr,code = <INPUT_KEY_2>;
+		};
+		button_3 {
+			gpios = <&gpioa 3 (GPIO_PULL_UP | GPIO_ACTIVE_LOW)>;
+			zephyr,code = <INPUT_KEY_3>;
+		};
+	};
+
+	hid_dev_0: hid_dev_0 {
+		compatible = "zephyr,hid-device";
+		label = "HID0";
+		protocol-code = "keyboard";
+		in-report-size = <64>;
+		in-polling-period-us = <1000>;
+	};
+};
+
