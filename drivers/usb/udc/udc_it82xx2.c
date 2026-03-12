@@ -485,10 +485,15 @@ static int it82xx2_ep_enqueue(const struct device *dev, struct udc_ep_config *co
 
 		if (bi->setup || bi->status) {
 			/* SETUP can be received without any action.
-			 * The OUT buffer is enqueued before the data-in stage finishes.
-			 * To prevent missing OUT status, firmware enables the ready bit
-			 * in `work_handler_in` instead of doing so after enqueuing the
-			 * OUT status buffer.
+			 * The OUT buffer is queued before the data-in stage finishes. To avoid
+			 * missing OUT status, firmware enables `EP_READY_ENABLE` in
+			 * `work_handler_in()` instead of immediately after queuing the OUT status
+			 * buffer. Therefore, no action is needed for OUT status here.
+			 *
+			 * If the ACK handshake of the last IN data transaction is corrupted,
+			 * hardware will not generate the xfer_done interrupt and will not clear
+			 * the `EP_READY_ENABLE` bit set for the IN data stage. In this case, the
+			 * device still responds with ACK when the host initiates OUT status stage.
 			 */
 			return 0;
 		}
@@ -1028,7 +1033,14 @@ static inline int work_handler_in(const struct device *dev, uint8_t ep)
 		struct udc_buf_info *bi = udc_get_buf_info(buf);
 
 		if (bi->data) {
-			/* set ready bit for out status stage */
+			/* The `EP_READY_ENABLE` bit enables responses to host-initiated
+			 * transactions and is shared by all transaction types (SETUP, IN, and OUT).
+			 * The bit is automatically cleared to 0 when the transaction completes.
+			 *
+			 * The `EP_READY_ENABLE` for OUT status stage must be enabled only after the
+			 * IN data token interrupt is received; otherwise the OUT status transaction
+			 * may be missed.
+			 */
 			it82xx2_usb_set_ep_ctrl(dev, 0, EP_READY_ENABLE, true);
 		}
 	}
