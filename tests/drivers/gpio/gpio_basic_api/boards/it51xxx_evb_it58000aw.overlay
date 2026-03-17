@@ -8,6 +8,142 @@
 	resources {
 		compatible = "test-gpio-basic-api";
 		out-gpios = <&gpioa 3 0>; /* GPIOA.3 */
-		in-gpios = <&gpioe 4 0>;  /* GPIOE.4 */
+		//out-gpios = <&gpioa 0 0>; /* GPIOA.0 */
+
+		/* WUC Group 2 */
+		//in-gpios = <&gpiod 0 0>;  /* GPIOD.0 */
+		//in-gpios = <&gpiod 1 0>;  /* GPIOD.1 */
+		//in-gpios = <&gpioc 4 0>;  /* GPIOC.4 */
+		//in-gpios = <&gpioc 6 0>;  /* GPIOC.6 */
+		//in-gpios = <&gpiod 2 0>;  /* GPIOD.2 */
+
+		/* WUC Group 4 */
+		//in-gpios = <&gpioe 5 0>;  /* GPIOE.5 */
+		//in-gpios = <&gpioe 6 0>;  /* GPIOE.6 */
+		//in-gpios = <&gpioe 7 0>;  /* GPIOE.7 */
+
+		/* WUC Group 5 */
+		//in-gpios = <&gpiok 0 0>;  /* GPIOK.0 */
+		//in-gpios = <&gpiok 1 0>;  /* GPIOK.1 */
+		//in-gpios = <&gpiok 2 0>;  /* GPIOK.2 */
+		//in-gpios = <&gpiok 3 0>;  /* GPIOK.3 */
+		//in-gpios = <&gpiok 4 0>;  /* GPIOK.4 */
+		//in-gpios = <&gpiok 5 0>;  /* GPIOK.5 */
+		//in-gpios = <&gpiok 6 0>;  /* GPIOK.6 */
+		//in-gpios = <&gpiok 7 0>;  /* GPIOK.7 */
+
+		/* WUC Group 6 */
+		//in-gpios = <&gpioh 0 0>;  /* GPIOH.0 */
+		//in-gpios = <&gpioh 1 0>;  /* GPIOH.1 */
+		//in-gpios = <&gpioh 2 0>;  /* GPIOH.2 */
+		//in-gpios = <&gpioh 3 0>;  /* GPIOH.3 */
+		//in-gpios = <&gpiof 4 0>;  /* GPIOF.4 */
+		//in-gpios = <&gpiof 5 0>;  /* GPIOF.5 */
+		//in-gpios = <&gpiof 6 0>;  /* GPIOF.6 */
+		//in-gpios = <&gpiof 7 0>;  /* GPIOF.7 */
+
+		/* WUC Group 7 */
+		//in-gpios = <&gpioe 0 0>;  /* GPIOE.0 */
+		//in-gpios = <&gpioe 1 0>;  /* GPIOE.1 */
+		//in-gpios = <&gpioe 2 0>;  /* GPIOE.2 */
+		//in-gpios = <&gpioe 3 0>;  /* GPIOE.3 */
+		//in-gpios = <&gpioi 4 0>;  /* GPIOI.4 */
+		//in-gpios = <&gpioi 5 0>;  /* GPIOI.5 */
+		//in-gpios = <&gpioi 6 0>;  /* GPIOI.6 */
+		//in-gpios = <&gpioi 7 0>;  /* GPIOI.7 */
+
+		/* WUC Group 8 */
+		//in-gpios = <&gpioa 3 0>;  /* GPIOA.3 */
+		//in-gpios = <&gpioa 4 0>;  /* GPIOA.4 */
+		//in-gpios = <&gpioa 5 0>;  /* GPIOA.5 */
+		//in-gpios = <&gpioa 6 0>;  /* GPIOA.6 */
+		//in-gpios = <&gpiob 2 0>;  /* GPIOB.2 */
+		//in-gpios = <&gpioc 0 0>;  /* GPIOC.0 */
+		//in-gpios = <&gpioc 7 0>;  /* GPIOC.7 */
+		//in-gpios = <&gpiod 7 0>;  /* GPIOD.7 */
+
+		/* WUC Group 9 */
+		//in-gpios = <&gpioh 4 0>;  /* GPIOH.4 */
+		//in-gpios = <&gpioh 5 0>;  /* GPIOH.5 */
+		//in-gpios = <&gpioh 6 0>;  /* GPIOH.6 */
+		//in-gpios = <&gpioa 0 0>;  /* GPIOA.0 */
+		//in-gpios = <&gpioa 1 0>;  /* GPIOA.1 */
+		//in-gpios = <&gpioa 2 0>;  /* GPIOA.2 */
+		//in-gpios = <&gpiob 4 0>;  /* GPIOB.4 */
+		//in-gpios = <&gpioc 2 0>;  /* GPIOC.2 */
+
+		/* WUC Group 10 */
+		//in-gpios = <&gpiof 0 0>;  /* GPIOF.0 */
+		//in-gpios = <&gpiof 1 0>;  /* GPIOF.1 */
+		//in-gpios = <&gpiof 2 0>;  /* GPIOF.2 */
+		//in-gpios = <&gpiof 3 0>;  /* GPIOF.3 */
+		//in-gpios = <&gpioa 7 0>;  /* GPIOA.7 */
+		//in-gpios = <&gpiob 0 0>;  /* GPIOB.0 */
+		//in-gpios = <&gpiob 1 0>;  /* GPIOB.1 */
+		//in-gpios = <&gpiob 3 0>;  /* GPIOB.3 */
+
+		/* WUC Group 11 */
+		//in-gpios = <&gpiob 5 0>;  /* GPIOB.5 */
+		//in-gpios = <&gpiob 6 0>;  /* GPIOB.6 */
+		//in-gpios = <&gpiob 7 0>;  /* GPIOB.7 */
+		//in-gpios = <&gpioc 1 0>;  /* GPIOC.1 */
+		//in-gpios = <&gpioc 3 0>;  /* GPIOC.3 */
+		//in-gpios = <&gpioc 5 0>;  /* GPIOC.5 */
+		//in-gpios = <&gpiod 3 0>;  /* GPIOD.3 */
+		//in-gpios = <&gpiod 4 0>;  /* GPIOD.4 */
+
+		/* WUC Group 12 */
+		//in-gpios = <&gpiod 5 0>;  /* GPIOD.5 */
+		//in-gpios = <&gpiod 6 0>;  /* GPIOD.6 */
+		//in-gpios = <&gpioe 4 0>;  /* GPIOE.4 */
+		//in-gpios = <&gpiog 0 0>;  /* GPIOG.0 */
+		//in-gpios = <&gpiog 1 0>;  /* GPIOG.1 */
+		//in-gpios = <&gpiog 2 0>;  /* GPIOG.2 */
+		//in-gpios = <&gpiog 6 0>;  /* GPIOG.6 */
+		in-gpios = <&gpioi 0 0>;  /* GPIOI.0 */
+
+		/* WUC Group 13 */
+		//in-gpios = <&gpioi 1 0>;  /* GPIOI.1 */
+		//in-gpios = <&gpioi 2 0>;  /* GPIOI.2 */
+		//in-gpios = <&gpioi 3 0>;  /* GPIOI.3 */
+		//in-gpios = <&gpioh 7 0>;  /* GPIOH.7 */
+
+		/* WUC Group 14 */
+		//in-gpios = <&gpioj 0 0>;  /* GPIOJ.0 */
+		//in-gpios = <&gpioj 1 0>;  /* GPIOJ.1 */
+		//in-gpios = <&gpioj 3 0>;  /* GPIOJ.3 */
+		//in-gpios = <&gpioj 4 0>;  /* GPIOJ.4 */
+		//in-gpios = <&gpioj 5 0>;  /* GPIOJ.5 */
+		//in-gpios = <&gpioj 6 0>;  /* GPIOJ.6 */
+		//in-gpios = <&gpioj 7 0>;  /* GPIOJ.7 */
+
+		/* WUC Group 15 */
+		//in-gpios = <&gpiol 0 0>;  /* GPIOL.0 */
+		//in-gpios = <&gpiol 1 0>;  /* GPIOL.1 */
+		//in-gpios = <&gpiol 2 0>;  /* GPIOL.2 */
+		//in-gpios = <&gpiol 3 0>;  /* GPIOL.3 */
+		//in-gpios = <&gpiol 4 0>;  /* GPIOL.4 */
+		//in-gpios = <&gpiol 5 0>;  /* GPIOL.5 */
+		//in-gpios = <&gpiol 6 0>;  /* GPIOL.6 */
+		//in-gpios = <&gpiol 7 0>;  /* GPIOL.7 */
+
+		/* WUC Group 16 */
+		//in-gpios = <&gpiom 0 0>;  /* GPIOM.0 */
+		//in-gpios = <&gpiom 1 0>;  /* GPIOM.1 */
+		//in-gpios = <&gpiom 2 0>;  /* GPIOM.2 */
+		//in-gpios = <&gpiom 3 0>;  /* GPIOM.3 */
+		//in-gpios = <&gpiom 4 0>;  /* GPIOM.4 */
+		//in-gpios = <&gpiom 5 0>;  /* GPIOM.5 */
+		//in-gpios = <&gpiom 6 0>;  /* GPIOM.6 */
 	};
+
+
+};
+
+&kbd {
+	status = "disabled";
+};
+
+&adc0 {
+	status = "disabled";
 };
