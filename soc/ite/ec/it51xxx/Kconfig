@@ -71,4 +71,10 @@ config SOC_IT51XXX_SIGNATURE_DATA_EXTENSION
 	  table. When enabled, signature_custom.S is included into the SoC vector
 	  layout. The custom signature extension starts at offset 0x50.
 
+config SOC_IT51XXX_USB_GPIO_CONTROL
+	bool
+	help
+	  Indicates that the SoC supports enabling or disabling USB host/device
+	  GPIO pins (F2/F3 or F4/F5) via a register.
+
 endif # SOC_SERIES_IT51XXX
