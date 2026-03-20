@@ -14,6 +14,12 @@
 
 LOG_MODULE_REGISTER(pinctrl_ite_it8xxx2, LOG_LEVEL_ERR);
 
+#define INST_KB_SCAN_HAS_FUNC3(n)                                                                  \
+	|| (!DT_INST_PROP(n, gpio_group) && DT_INST_NODE_HAS_PROP(n, func3_gcr) &&                 \
+	    DT_INST_NODE_HAS_PROP(n, func3_en_mask))
+
+#define PINCTRL_KB_SCAN_FUNC3_DEFINED (0 DT_INST_FOREACH_STATUS_OKAY(INST_KB_SCAN_HAS_FUNC3))
+
 #define PINCTRL_ALT_FUNC5_IS_DEFINED                                                             \
 	DT_ANY_COMPAT_HAS_PROP_STATUS_OKAY(DT_DRV_COMPAT, func5_gcr) &&                            \
 		DT_ANY_COMPAT_HAS_PROP_STATUS_OKAY(DT_DRV_COMPAT, func5_en_mask)
@@ -68,6 +74,15 @@ struct pinctrl_it8xxx2_ksi_kso {
 	 * (this bit apply to all pins)
 	 */
 	int pullup_mask;
+
+#if PINCTRL_KB_SCAN_FUNC3_DEFINED
+	/* gpio port control register (byte mapping to pin) */
+	uint8_t *reg_gpcr;
+	struct {
+		uintptr_t gcr[GPIO_GROUP_MEMBERS];
+		uint8_t en_mask[GPIO_GROUP_MEMBERS];
+	} func3;
+#endif /* PINCTRL_KB_SCAN_FUNC3_DEFINED */
 };
 
 struct pinctrl_it8xxx2_config {
@@ -324,6 +339,23 @@ static int pinctrl_kscan_it8xxx2_configure_pins(const pinctrl_soc_pin_t *pins)
 		/* Set a pin of KSI[7:0]/KSO[15:0] to kbs mode */
 		*reg_gctrl &= ~pin_mask;
 		break;
+#if PINCTRL_KB_SCAN_FUNC3_DEFINED
+	case IT8XXX2_ALT_FUNC_3:
+		volatile uint8_t *reg_gpcr = (uint8_t *)ksi_kso->reg_gpcr + pins->pin;
+		volatile uint8_t *reg_func3_gcr = (uint8_t *)(ksi_kso->func3.gcr[pins->pin]);
+
+		/* keyboard scan base register: set ksi/kso pin controlled by gpio */
+		*reg_gctrl |= pin_mask;
+
+		/* enable alternate function setting */
+		*reg_gpcr &= ~(GPCR_PORT_PIN_MODE_INPUT | GPCR_PORT_PIN_MODE_OUTPUT);
+
+		/* configure alternate function 3 */
+		if (reg_func3_gcr) {
+			*reg_func3_gcr |= ksi_kso->func3.en_mask[pins->pin];
+		}
+		break;
+#endif /* PINCTRL_KB_SCAN_FUNC3_DEFINED */
 	case IT8XXX2_ALT_DEFAULT:
 		/* Set a pin of KSI[7:0]/KSO[15:0] to gpio mode */
 		*reg_gctrl |= pin_mask;
@@ -426,6 +458,17 @@ static int pinctrl_it8xxx2_init(const struct device *dev)
 #define DECLARE_GPIO_ALT_FUNC5(inst)
 #endif /* PINCTRL_ALT_FUNC5_IS_DEFINED */
 
+#if PINCTRL_KB_SCAN_FUNC3_DEFINED
+#define DECLARE_KB_SCAN_ALT_FUNC3(inst)                                                            \
+	.reg_gpcr = (uint8_t *)DT_INST_REG_ADDR_BY_IDX(inst, 2),                                   \
+	.func3 = {                                                                                 \
+		.gcr = DT_INST_PROP_OR(inst, func3_gcr, {0}),                                      \
+		.en_mask = DT_INST_PROP_OR(inst, func3_en_mask, {0}),                              \
+	},
+#else
+#define DECLARE_KB_SCAN_ALT_FUNC3(inst)
+#endif /* PINCTRL_KB_SCAN_FUNC3_DEFINED */
+
 #define INIT_UNION_CONFIG(inst)                                                                    \
 	COND_CODE_1(DT_INST_PROP(inst, gpio_group),                                    \
 		(.gpio = {                                                             \
@@ -446,6 +489,7 @@ static int pinctrl_it8xxx2_init(const struct device *dev)
 			 .reg_ctrl = (uint8_t *)DT_INST_REG_ADDR_BY_IDX(inst, 1),      \
 			 .pp_od_mask = (uint8_t)DT_INST_PROP(inst, pp_od_mask),        \
 			 .pullup_mask = (uint8_t)DT_INST_PROP(inst, pullup_mask),      \
+			 DECLARE_KB_SCAN_ALT_FUNC3(inst)                               \
 		})                                                                     \
 	)
 
