@@ -12,4 +12,5 @@ supported:
   - pinctrl
   - pm
   - uart
+  - rtc
 vendor: ite
