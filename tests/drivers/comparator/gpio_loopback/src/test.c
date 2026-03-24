@@ -30,6 +30,9 @@ static void test_before(void *f)
 {
 	ARG_UNUSED(f);
 
+	/* DEBUG: enable gpioh4/gpioh5/gpiod7 output for voltage comparator */
+	sys_write8(BIT(0) | BIT(1) | BIT(2), 0xf016fe);
+
 	k_sem_reset(&test_sem);
 	zassert_ok(gpio_pin_set_dt(&test_pin, 0));
 	k_msleep(1);
