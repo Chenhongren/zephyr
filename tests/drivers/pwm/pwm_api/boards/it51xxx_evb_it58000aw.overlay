@@ -1,6 +1,144 @@
 
 / {
 	aliases {
-		pwm-test = &pwm0;
+		pwm-test = &pwm14;
 	};
+
+	chosen {
+		zephyr,console = &uart2;
+		zephyr,shell-uart = &uart2;
+	};
+};
+
+&uart1 {
+	status = "disabled";
+};
+
+&uart2 {
+	status = "okay";
+	current-speed = <115200>;
+	clock-frequency = <1843200>;
+	pinctrl-0 = <&uart2_rx_gph1_default
+		     &uart2_tx_gph2_default>;
+	pinctrl-names = "default";
+};
+
+&pwm0 {
+	status = "disabled";
+	/* 1 = PWM_PRESCALER_C4, 2 = PWM_PRESCALER_C6, 3 = PWM_PRESCALER_C7 */
+	prescaler-cx = <PWM_PRESCALER_C4>;
+	pinctrl-0 = <&pwm0_gpa0_default>;
+	pinctrl-names = "default";
+};
+
+&pwm1 {
+	status = "disabled";
+	/* 1 = PWM_PRESCALER_C4, 2 = PWM_PRESCALER_C6, 3 = PWM_PRESCALER_C7 */
+	prescaler-cx = <PWM_PRESCALER_C4>;
+	pinctrl-0 = <&pwm1_gpa1_default>;
+	pinctrl-names = "default";
+};
+
+&pwm2 {
+	status = "disabled";
+	/* 1 = PWM_PRESCALER_C4, 2 = PWM_PRESCALER_C6, 3 = PWM_PRESCALER_C7 */
+	prescaler-cx = <PWM_PRESCALER_C4>;
+	pinctrl-0 = <&pwm2_gpa2_default>;
+	pinctrl-names = "default";
+};
+
+&pwm3 {
+	status = "disabled";
+	/* 1 = PWM_PRESCALER_C4, 2 = PWM_PRESCALER_C6, 3 = PWM_PRESCALER_C7 */
+	prescaler-cx = <PWM_PRESCALER_C4>;
+	pinctrl-0 = <&pwm3_gpa3_default>;
+	pinctrl-names = "default";
+};
+
+&pwm4 {
+	status = "disabled";
+	/* 1 = PWM_PRESCALER_C4, 2 = PWM_PRESCALER_C6, 3 = PWM_PRESCALER_C7 */
+	prescaler-cx = <PWM_PRESCALER_C4>;
+	pinctrl-0 = <&pwm4_gpa4_default>;
+	pinctrl-names = "default";
+};
+
+&pwm5 {
+	status = "disabled";
+	/* 1 = PWM_PRESCALER_C4, 2 = PWM_PRESCALER_C6, 3 = PWM_PRESCALER_C7 */
+	prescaler-cx = <PWM_PRESCALER_C4>;
+	pinctrl-0 = <&pwm5_gpa5_default>;
+	pinctrl-names = "default";
+};
+
+&pwm6 {
+	status = "disabled";
+	/* 1 = PWM_PRESCALER_C4, 2 = PWM_PRESCALER_C6, 3 = PWM_PRESCALER_C7 */
+	prescaler-cx = <PWM_PRESCALER_C4>;
+	pinctrl-0 = <&pwm6_gpa6_default>;
+	pinctrl-names = "default";
+};
+
+&pwm7 {
+	status = "disabled";
+	/* 1 = PWM_PRESCALER_C4, 2 = PWM_PRESCALER_C6, 3 = PWM_PRESCALER_C7 */
+	prescaler-cx = <PWM_PRESCALER_C4>;
+	pinctrl-0 = <&pwm7_gpa7_default>;
+	pinctrl-names = "default";
+};
+
+&pwm8 {
+	status = "okay";
+	/* 1 = PWM_PRESCALER_C4, 2 = PWM_PRESCALER_C6, 3 = PWM_PRESCALER_C7 */
+	prescaler-cx = <PWM_PRESCALER_C7>;
+	pinctrl-0 = <&pwm8_gpc7_default>;
+	pinctrl-names = "default";
+};
+
+&pwm9 {
+	status = "disabled";
+	/* 1 = PWM_PRESCALER_C4, 2 = PWM_PRESCALER_C6, 3 = PWM_PRESCALER_C7 */
+	prescaler-cx = <PWM_PRESCALER_C4>;
+	pinctrl-0 = <&pwm9_gph0_default>;
+	pinctrl-names = "default";
+};
+
+&pwm10 {
+	status = "disabled";
+	/* 1 = PWM_PRESCALER_C4, 2 = PWM_PRESCALER_C6, 3 = PWM_PRESCALER_C7 */
+	prescaler-cx = <PWM_PRESCALER_C4>;
+	pinctrl-0 = <&pwm10_gph1_default>;
+	pinctrl-names = "default";
+};
+
+&pwm11 {
+	status = "disabled";
+	/* 1 = PWM_PRESCALER_C4, 2 = PWM_PRESCALER_C6, 3 = PWM_PRESCALER_C7 */
+	prescaler-cx = <PWM_PRESCALER_C4>;
+	pinctrl-0 = <&pwm11_gph2_default>;
+	pinctrl-names = "default";
+};
+
+&pwm12 {
+	status = "disabled";
+	/* 1 = PWM_PRESCALER_C4, 2 = PWM_PRESCALER_C6, 3 = PWM_PRESCALER_C7 */
+	prescaler-cx = <PWM_PRESCALER_C4>;
+	pinctrl-0 = <&pwm12_gpb1_default>;
+	pinctrl-names = "default";
+};
+
+&pwm13 {
+	status = "disabled";
+	/* 1 = PWM_PRESCALER_C4, 2 = PWM_PRESCALER_C6, 3 = PWM_PRESCALER_C7 */
+	prescaler-cx = <PWM_PRESCALER_C4>;
+	pinctrl-0 = <&pwm13_gpb4_default>;
+	pinctrl-names = "default";
+};
+
+&pwm14 {
+	status = "okay";
+	/* 1 = PWM_PRESCALER_C4, 2 = PWM_PRESCALER_C6, 3 = PWM_PRESCALER_C7 */
+	prescaler-cx = <PWM_PRESCALER_C4>;
+	pinctrl-0 = <&pwm14_gpb7_default>;
+	pinctrl-names = "default";
 };
