@@ -1,0 +1,11 @@
+sample:
+  name: ITE Tach Sensor
+tests:
+  sample.sensor.ite.tach:
+    tags: sensors
+    depends_on:
+      - pwm
+    platform_allow:
+      - it8xxx2_evb
+      - it82xx2_evb
+      - it51xxx_evb/it51526aw

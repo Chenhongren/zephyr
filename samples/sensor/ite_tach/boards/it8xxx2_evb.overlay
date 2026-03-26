@@ -1,0 +1,30 @@
+/*
+ * Copyright (c) 2026 ITE Corporation. All Rights Reserved.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+/ {
+	aliases {
+		tach-test = &tach0;
+		pwm-test = &pwm0;
+	};
+};
+
+&pwm0 {
+	status = "okay";
+	prescaler-cx = <PWM_PRESCALER_C6>;
+	pinctrl-0 = <&pwm0_gpa0_default>;
+	pinctrl-names = "default";
+};
+
+&tach0 {
+	status = "okay";
+	pulses-per-round = <2>;
+	/* IT8XXX2_TACH_CHANNEL_A: tach0a_gpd6_default
+	 * IT8XXX2_TACH_CHANNEL_B: tach0b_gpj2_default
+	 */
+	channel = <IT8XXX2_TACH_CHANNEL_B>;
+	pinctrl-0 = <&tach0b_gpj2_default>;
+	pinctrl-names = "default";
+};
