@@ -197,7 +197,18 @@ static int wdt_it51xxx_feed(const struct device *dev, int channel_id)
 	sys_write8(reg_val | WDT_ET1RST, base + REG_ETWCTRL);
 
 	/* restart watchdog timer */
+#if CONFIG_SOC_IT58000AW
+	/* workaround for watchdog restart bug on soc it58000.aw:
+	 * writing the magic number (0x5C) to offset 0x44 (REG_ET1CNTLLR)
+	 * using 32-bit access restarts watchdog as intended.
+	 *
+	 * side effect: the low bytes of timer1 and watchdog are set to
+	 * 0x5C, causing timing deviation of ~90 ms (5Ch / 1024k).
+	 */
+	sys_write32(IT51XXX_WATCHDOG_MAGIC_BYTE, base + REG_ET1CNTLLR);
+#else
 	sys_write8(IT51XXX_WATCHDOG_MAGIC_BYTE, base + REG_EWDKEYR);
+#endif /* CONFIG_SOC_IT58000AW */
 
 	/* reset pre-warning timer1 to default if time is touched */
 	if (data->wdt_warning_fired) {
