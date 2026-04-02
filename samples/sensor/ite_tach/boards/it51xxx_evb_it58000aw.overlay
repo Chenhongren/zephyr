@@ -1,0 +1,119 @@
+/*
+ * Copyright (c) 2026 ITE Corporation. All Rights Reserved.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+/ {
+	aliases {
+		tach-test = &tach4;
+		pwm-test = &pwm0;
+	};
+	/* for tach3 test */
+	/*
+	chosen {
+		zephyr,console = &uart2;
+		zephyr,shell-uart = &uart2;
+	};
+	*/
+};
+
+/* for tach3 test */
+/*
+&uart1 {
+	status = "disabled";
+};
+
+&uart2 {
+	status = "okay";
+	current-speed = <115200>;
+	clock-frequency = <1843200>;
+	pinctrl-0 = <&uart2_rx_gph1_default
+		     &uart2_tx_gph2_default>;
+	pinctrl-names = "default";
+};
+*/
+
+&pwm0 {
+	status = "okay";
+	prescaler-cx = <PWM_PRESCALER_C6>;
+	pinctrl-0 = <&pwm0_gpa0_default>;
+	pinctrl-names = "default";
+};
+
+&tach0 {
+	status = "okay";
+	pulses-per-round = <2>;
+	/* IT51XXX_TACH_INPUT_PIN_A: tach0a_gpd6_default
+	 * IT51XXX_TACH_INPUT_PIN_B: tach0b_gpc6_default
+	 */
+	input-pin = <IT51XXX_TACH_INPUT_PIN_B>;
+	pinctrl-0 = <&tach0b_gpc6_default>;
+	pinctrl-names = "default";
+};
+
+&tach1 {
+	status = "okay";
+	pulses-per-round = <2>;
+	/* IT51XXX_TACH_INPUT_PIN_A: tach1a_gpd7_default
+	 * IT51XXX_TACH_INPUT_PIN_B: tach1b_gpj6_default
+	 */
+	input-pin = <IT51XXX_TACH_INPUT_PIN_B>;
+	pinctrl-0 = <&tach1b_gpj6_default>;
+	pinctrl-names = "default";
+};
+
+&tach2 {
+	status = "okay";
+	pulses-per-round = <2>;
+	/* IT51XXX_TACH_INPUT_PIN_A: tach2a_gpj0_default
+	 * IT51XXX_TACH_INPUT_PIN_B: tach2b_gpj1_default
+	 */
+	input-pin = <IT51XXX_TACH_INPUT_PIN_B>;
+	pinctrl-0 = <&tach2b_gpj1_default>;
+	pinctrl-names = "default";
+};
+
+&tach3 {
+	status = "disabled";
+	pulses-per-round = <2>;
+	/* IT51XXX_TACH_INPUT_PIN_A: tach3a_gpe6_default
+	 * IT51XXX_TACH_INPUT_PIN_B: tach3b_gpa1_default
+	 */
+	input-pin = <IT51XXX_TACH_INPUT_PIN_A>;
+	pinctrl-0 = <&tach3a_gpe6_default>;
+	pinctrl-names = "default";
+};
+
+&tach4 {
+	status = "okay";
+	pulses-per-round = <2>;
+	/* IT51XXX_TACH_INPUT_PIN_A: tach4a_gpa5_default
+	 * IT51XXX_TACH_INPUT_PIN_B: tach4b_gpn5_default
+	 */
+	input-pin = <IT51XXX_TACH_INPUT_PIN_B>;
+	pinctrl-0 = <&tach4b_gpn5_default>;
+	pinctrl-names = "default";
+};
+
+&tach5 {
+	status = "okay";
+	pulses-per-round = <2>;
+	/* IT51XXX_TACH_INPUT_PIN_A: tach5a_gph3_default
+	 * IT51XXX_TACH_INPUT_PIN_B: tach5b_gph4_default
+	 */
+	input-pin = <IT51XXX_TACH_INPUT_PIN_B>;
+	pinctrl-0 = <&tach5b_gph4_default>;
+	pinctrl-names = "default";
+};
+
+&tach6 {
+	status = "okay";
+	pulses-per-round = <2>;
+	/* IT51XXX_TACH_INPUT_PIN_A: tach6a_gpe4_default
+	 * IT51XXX_TACH_INPUT_PIN_B: tach6b_gpb0_default
+	 */
+	input-pin = <IT51XXX_TACH_INPUT_PIN_B>;
+	pinctrl-0 = <&tach6b_gpb0_default>;
+	pinctrl-names = "default";
+};

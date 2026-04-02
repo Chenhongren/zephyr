@@ -9,3 +9,4 @@ tests:
       - it8xxx2_evb
       - it82xx2_evb
       - it51xxx_evb/it51526aw
+      - it51xxx_evb/it58000aw
