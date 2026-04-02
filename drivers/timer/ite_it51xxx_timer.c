@@ -356,7 +356,11 @@ void arch_busy_wait(uint32_t usec_to_wait)
 	 */
 	compensated_us = usec_to_wait * 1000 / 1086;
 	for (;;) {
+#if CONFIG_ITE_IT51XXX_TIMER_COUNTUP_IN_COMBINATION_MODE
 		if ((read_timer_obser(BUSY_WAIT_H_TIMER) - start) >= compensated_us) {
+#else
+		if ((start - read_timer_obser(BUSY_WAIT_H_TIMER)) >= compensated_us) {
+#endif /* CONFIG_ITE_IT51XXX_TIMER_COUNTUP_IN_COMBINATION_MODE */
 			break;
 		}
 	}
