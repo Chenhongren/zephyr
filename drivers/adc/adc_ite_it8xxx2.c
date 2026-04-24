@@ -49,6 +49,8 @@ LOG_MODULE_REGISTER(adc_ite_it8xxx2);
 #define ADC_SACLKDIV(div)   FIELD_PREP(ADC_SACLKDIV_MASK, div)
 #endif
 
+#define IT8XXX2_RESOLUTION 10U
+
 /* List of ADC channels. */
 enum chip_adc_channel {
 	CHIP_ADC_CH0 = 0,
@@ -71,6 +73,8 @@ struct adc_it8xxx2_data {
 	struct k_sem sem;
 	/* Channel ID */
 	uint32_t ch;
+	/* bitmap of configured channels */
+	uint32_t configured_channels;
 	/* Save ADC result to the buffer. */
 	uint16_t *buffer;
 	/*
@@ -92,9 +96,29 @@ struct adc_it8xxx2_cfg {
 #define ADC_IT8XXX2_REG_BASE	\
 	((struct adc_it8xxx2_regs *)(DT_INST_REG_ADDR(0)))
 
+static inline void adc_channel_int_enable(const uint32_t ch, const bool enable)
+{
+	struct adc_it8xxx2_regs *const adc_regs = ADC_IT8XXX2_REG_BASE;
+
+	if (ch <= CHIP_ADC_CH7) {
+		if (enable) {
+			adc_regs->VCH0CTL |= IT8XXX2_ADC_INTDVEN;
+		} else {
+			adc_regs->VCH0CTL &= ~IT8XXX2_ADC_INTDVEN;
+		}
+	} else {
+		if (enable) {
+			adc_regs->adc_vchs_ctrl[ADC_CHANNEL_OFFSET(ch)].VCHCTL |= IT8XXX2_ADC_INTDVEN;
+		} else {
+			adc_regs->adc_vchs_ctrl[ADC_CHANNEL_OFFSET(ch)].VCHCTL &= ~IT8XXX2_ADC_INTDVEN;
+		}
+	}
+}
+
 static int adc_it8xxx2_channel_setup(const struct device *dev,
 				     const struct adc_channel_cfg *channel_cfg)
 {
+	struct adc_it8xxx2_data *data = dev->data;
 	uint8_t channel_id = channel_cfg->channel_id;
 
 	if (channel_cfg->acquisition_time != ADC_ACQ_TIME_DEFAULT) {
@@ -123,6 +147,8 @@ static int adc_it8xxx2_channel_setup(const struct device *dev,
 		LOG_ERR("Invalid channel reference");
 		return -EINVAL;
 	}
+
+	data->configured_channels |= BIT(channel_id);
 
 	LOG_DBG("Channel setup succeeded!");
 	return 0;
@@ -153,7 +179,7 @@ static void adc_disable_measurement(uint32_t ch)
 	adc_regs->ADCCFG &= ~IT8XXX2_ADC_ADCEN;
 
 	/* disable adc interrupt */
-	irq_disable(DT_INST_IRQN(0));
+	adc_channel_int_enable(ch, false);
 }
 
 static int adc_data_valid(const struct device *dev)
@@ -227,11 +253,11 @@ static void adc_enable_measurement(uint32_t ch)
 
 	if (ch <= CHIP_ADC_CH7) {
 		/* Select and enable a voltage channel input for measurement */
-		adc_regs->VCH0CTL = (IT8XXX2_ADC_DATVAL | IT8XXX2_ADC_INTDVEN) + ch;
+		adc_regs->VCH0CTL = IT8XXX2_ADC_DATVAL + ch;
 	} else {
 		/* Channels 13~16 controller setting */
 		adc_regs->adc_vchs_ctrl[ADC_CHANNEL_OFFSET(ch)].VCHCTL =
-			IT8XXX2_ADC_DATVAL | IT8XXX2_ADC_INTDVEN | IT8XXX2_ADC_VCHEN;
+			IT8XXX2_ADC_DATVAL | IT8XXX2_ADC_VCHEN;
 	}
 
 	/* ADC module enable */
@@ -253,18 +279,30 @@ static void adc_enable_measurement(uint32_t ch)
 		adc_poll_valid_data();
 	} else {
 		/* Enable adc interrupt */
-		irq_enable(DT_INST_IRQN(0));
+		adc_channel_int_enable(ch, true);
 		/* Wait for an interrupt to read valid data. */
+
+#if 0 /* TODO: ITE Debug */
 		k_sem_take(&data->sem, K_FOREVER);
+#else
+		int ret;
+
+		ret = k_sem_take(&data->sem, K_MSEC(500));
+		if (ret) {
+			printk("failed to take adc semaphore, ret %d, ch %d\n", ret, ch);
+			printk("IER01 0x%x, ISR01 0x%x, data valid %d\n", sys_read8(0xf03f05),
+			       sys_read8(0xf03f01), adc_data_valid(dev));
+			printk("ADCCFG 0x%x, VCH0CTL 0x%x\n", adc_regs->ADCCFG, adc_regs->VCH0CTL);
+		}
+#endif
 	}
 }
 
-static int check_buffer_size(const struct adc_sequence *sequence,
-			     uint8_t active_channels)
+static int check_buffer_size(const struct adc_sequence *sequence)
 {
 	size_t needed_buffer_size;
 
-	needed_buffer_size = active_channels * sizeof(uint16_t);
+	needed_buffer_size = POPCOUNT(sequence->channels) * sizeof(uint16_t);
 	if (sequence->options) {
 		needed_buffer_size *= (1 + sequence->options->extra_samplings);
 	}
@@ -283,6 +321,7 @@ static int adc_it8xxx2_start_read(const struct device *dev,
 {
 	struct adc_it8xxx2_data *data = dev->data;
 	uint32_t channel_mask = sequence->channels;
+	int ret;
 
 	/* Channels 13~16 should be shifted to the right by 5 */
 	if (channel_mask > BIT(CHIP_ADC_CH7)) {
@@ -294,10 +333,28 @@ static int adc_it8xxx2_start_read(const struct device *dev,
 		return -EINVAL;
 	}
 
-	if (!sequence->resolution) {
-		LOG_ERR("ADC resolution is not valid");
+	ret = check_buffer_size(sequence);
+	if (ret) {
+		return ret;
+	}
+
+	if (sequence->oversampling) {
+		LOG_ERR("unsupported oversampling");
 		return -EINVAL;
 	}
+
+	/* only supported 10-bit resolution */
+	if (sequence->resolution != IT8XXX2_RESOLUTION) {
+		LOG_ERR("supported 10-bit resolution only");
+		return -EINVAL;
+	}
+
+	if ((data->configured_channels & channel_mask) != channel_mask) {
+		LOG_ERR("channel 0x%x is not configured, 0x%x", channel_mask,
+			data->configured_channels);
+		return -EINVAL;
+	}
+
 	LOG_DBG("Configure resolution=%d", sequence->resolution);
 
 	data->buffer = sequence->buffer;
@@ -312,7 +369,6 @@ static void adc_context_start_sampling(struct adc_context *ctx)
 	struct adc_it8xxx2_data *data =
 		CONTAINER_OF(ctx, struct adc_it8xxx2_data, ctx);
 	uint32_t channels = ctx->sequence.channels;
-	uint8_t channel_count = 0;
 
 	data->repeat_buffer = data->buffer;
 
@@ -325,12 +381,6 @@ static void adc_context_start_sampling(struct adc_context *ctx)
 		channels &= ~BIT(data->ch);
 
 		adc_enable_measurement(data->ch);
-
-		channel_count++;
-	}
-
-	if (check_buffer_size(&ctx->sequence, channel_count)) {
-		return;
 	}
 
 	adc_context_on_sampling_done(&data->ctx, DEVICE_DT_INST_GET(0));
@@ -470,6 +520,8 @@ static int adc_it8xxx2_init(const struct device *dev)
 
 	IRQ_CONNECT(DT_INST_IRQN(0), DT_INST_IRQ(0, priority),
 		    adc_it8xxx2_isr, DEVICE_DT_INST_GET(0), 0);
+
+	irq_enable(DT_INST_IRQN(0));
 
 	k_sem_init(&data->sem, 0, 1);
 	adc_context_unlock_unconditionally(&data->ctx);
