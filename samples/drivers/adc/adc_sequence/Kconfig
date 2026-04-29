@@ -3,11 +3,11 @@
 
 config SEQUENCE_SAMPLES
 	int "Number of samples to be made on the sequence for each channel."
-	default 5
+	default 1
 
 config SEQUENCE_RESOLUTION
 	int "Set the resolution of the sequence readings."
-	default 12
+	default 10
 
 config SEQUENCE_OVERSAMPLING
 	int "Set the oversampling of the sequence readings."
@@ -15,6 +15,12 @@ config SEQUENCE_OVERSAMPLING
 
 config SEQUENCE_32BITS_REGISTERS
 	bool "ADC data sequences are on 32bits"
+	default n
+
+config INPUT_KBD_MATRIX
+	default y
+
+config INPUT_KBD_DRIVE_COLUMN_HOOK
 	default n
 
 source "Kconfig.zephyr"
