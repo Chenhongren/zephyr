@@ -8,7 +8,7 @@
 
 / {
 	/* Mapping between wuc bits and source device */
-	it51xxx-wuc-map {
+	wuc: it51xxx-wuc-map {
 		compatible = "ite,it51xxx-wuc-map";
 
 		/* WUC group 2 */
