@@ -1,0 +1,9 @@
+# Copyright (c) 2026 ITE Corporation.
+# SPDX-License-Identifier: Apache-2.0
+
+if SOC_IT5510BW
+
+config ITE_IT51XXX_INTC_VECTOR_LOADING_CTRL_SUPPORTED
+	default y
+
+endif # SOC_IT5510BW
