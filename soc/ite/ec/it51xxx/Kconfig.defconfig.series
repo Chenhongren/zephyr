@@ -33,6 +33,6 @@ config GEN_SW_ISR_TABLE
 config RISCV_SOC_INTERRUPT_INIT
 	default y
 
-rsource "Kconfig.defconfig.it51*"
+rsource "Kconfig.defconfig.it5*"
 
 endif # SOC_SERIES_IT51XXX
