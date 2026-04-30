@@ -1,0 +1,19 @@
+identifier: it51xxx_evb/it5510bw
+name: ITE-IT51XXX-EVB-IT5510BW
+type: mcu
+arch: riscv
+toolchain:
+  - zephyr
+ram: 128
+supported:
+  - flash
+  - gpio
+  - i2c
+  - pinctrl
+  - pm
+  - uart
+  - counter
+  - pwm
+  - watchdog
+  - adc
+vendor: ite
