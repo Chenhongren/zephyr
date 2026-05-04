@@ -14,7 +14,9 @@
 &manual_flash_1k {
 	status = "okay";
 
-	m1k-sel-access-flash = "external-fspi-cs1";
+	// m1k-sel-access-flash = "external-fspi-cs1";
+	// m1k-sel-access-flash = "external-fspi-cs0";
+	m1k-sel-access-flash = "internal";
 
 	pinctrl-0 = <&fspi_fsce1_gpg6_default
 		     &fspi_fdio2_gph5_default

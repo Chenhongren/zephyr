@@ -260,6 +260,7 @@ tests:
     build_only: true
     platform_allow:
       - it51xxx_evb/it51526aw
+      - it51xxx_evb/it5510bw
     extra_args:
       - DTC_OVERLAY_FILE="./boards/it51xxx_m1k.overlay"
   drivers.flash.common.mspi_single_io_low_frequency:
