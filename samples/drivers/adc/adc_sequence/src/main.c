@@ -64,7 +64,7 @@ static int adc_read_channel(int ch)
 	adc_raw_to_millivolts(adc_ref_internal(adc),
 			      ADC_GAIN_1, CONFIG_SEQUENCE_RESOLUTION,
 			      &ret);
-	// printf("%d: %" PRId32 "\n", ch, ret);
+	printf("%d: %" PRId32 "\n", ch, ret);
 	return ret;
 }
 
@@ -76,7 +76,7 @@ static void adc_thread(void *arg1, void *arg2, void *arg3)
 		adc_read_channel(0);
 		adc_read_channel(3);
 		adc_read_channel(6);
-		k_sleep(K_MSEC(10));
+		k_sleep(K_MSEC(1000));
 	}
 }
 
@@ -98,20 +98,20 @@ void start_adc_thread(const struct device *adc_dev, const int ch)
 	k_thread_name_set(tid, thread_name);
 }
 
-static const struct device *get_eeprom_device(void)
-{
-	const struct device *const dev = DEVICE_DT_GET(DT_ALIAS(eeprom_0));
+// static const struct device *get_eeprom_device(void)
+// {
+// 	const struct device *const dev = DEVICE_DT_GET(DT_ALIAS(eeprom_0));
 
-	if (!device_is_ready(dev)) {
-		printk("\nError: Device \"%s\" is not ready; "
-		       "check the driver initialization logs for errors.\n",
-		       dev->name);
-		return NULL;
-	}
+// 	if (!device_is_ready(dev)) {
+// 		printk("\nError: Device \"%s\" is not ready; "
+// 		       "check the driver initialization logs for errors.\n",
+// 		       dev->name);
+// 		return NULL;
+// 	}
 
-	printk("Found EEPROM device \"%s\"\n", dev->name);
-	return dev;
-}
+// 	printk("Found EEPROM device \"%s\"\n", dev->name);
+// 	return dev;
+// }
 
 #include <zephyr/input/input.h>
 #include <zephyr/input/input_kbd_matrix.h>
@@ -188,38 +188,18 @@ int main(void)
 	}
 
 	start_adc_thread(adc, 0);
-	start_adc_thread(adc, 3);
-	// for (size_t i = 0U; i < 2; i++) {
-	// 	start_adc_thread(adc, channel_cfgs[i].channel_id);
-	// 	printf("ite debug %d\n", channel_cfgs[i].channel_id);
-	// }
 
-	const struct device *eeprom = get_eeprom_device();
-	uint8_t temp2[128];
+	// const struct device *eeprom = get_eeprom_device();
+	// uint8_t temp2[128];
 
-	while(1) {
-		int rc = eeprom_read(eeprom, EEPROM_SAMPLE_OFFSET, &temp2, sizeof(temp2));
-		if (rc < 0) {
-			printk("Error: Couldn't read eeprom: err: %d.\n", rc);
-			return 0;
-		}
-
-		k_sleep(K_MSEC(10));
-	}
 	// while(1) {
-	// 	// printf("ADC sequence reading [%u]:\n", count++);
-
-	// 	k_sleep(K_MSEC(1));
-
-	// 	for (size_t channel_index = 0U; channel_index < CHANNEL_COUNT; channel_index++) {
-	// 		int32_t val_mv = adc_read_channel(channel_cfgs[channel_index].channel_id);
-
-	// 		// printf("- %s, channel %" PRId32 ", %" PRId32 " sequence samples",
-	// 		//        adc->name, channel_cfgs[channel_index].channel_id,
-	// 		//        CONFIG_SEQUENCE_SAMPLES);
-
-	// 		// printf(" = %" PRId32 "mV\n", val_mv);
+	// 	int rc = eeprom_read(eeprom, EEPROM_SAMPLE_OFFSET, &temp2, sizeof(temp2));
+	// 	if (rc < 0) {
+	// 		printk("Error: Couldn't read eeprom: err: %d.\n", rc);
+	// 		return 0;
 	// 	}
+
+	// 	k_sleep(K_MSEC(10));
 	// }
 
 	return 0;

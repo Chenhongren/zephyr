@@ -1,26 +1,9 @@
-/*
- * Copyright (c) 2026 ITE Corporation. All Rights Reserved.
- *
- * SPDX-License-Identifier: Apache-2.0
- */
-
 / {
+	zephyr,user {
+		io-channels = <&adc0 0>, <&adc0 3>, <&adc0 6>;
+	};
 	aliases {
 		adc0 = &adc0;
-	};
-
-	chosen {
-		keyboard-device = &kbd;
-	};
-
-	test_kbd_scan: test-kbd-scan {
-		compatible = "test-kbd-scan";
-		row-size = <3>;
-		col-size = <3>;
-		poll-period-ms = <5>;
-		debounce-down-ms = <40>;
-		debounce-up-ms = <80>;
-		poll-timeout-ms = <500>;
 	};
 };
 
@@ -29,6 +12,7 @@
 	#size-cells = <0>;
 
 	pinctrl-0 = <&adc0_ch0_gpi0_default &adc0_ch3_gpi3_default &adc0_ch6_gpi6_default>;
+
 	pinctrl-names = "default";
 
 	channel@0 {
@@ -38,7 +22,6 @@
 		zephyr,acquisition-time = <ADC_ACQ_TIME_DEFAULT>;
 		zephyr,resolution = <10>;
 	};
-
 	channel@3 {
 		reg = <3>;
 		zephyr,gain = "ADC_GAIN_1";
@@ -46,7 +29,6 @@
 		zephyr,acquisition-time = <ADC_ACQ_TIME_DEFAULT>;
 		zephyr,resolution = <10>;
 	};
-
 	channel@6 {
 		reg = <6>;
 		zephyr,gain = "ADC_GAIN_1";
@@ -54,12 +36,4 @@
 		zephyr,acquisition-time = <ADC_ACQ_TIME_DEFAULT>;
 		zephyr,resolution = <10>;
 	};
-};
-
-&uart2 {
-	status = "disabled";
-};
-
-&ite_uart2_wrapper {
-	status = "disabled";
 };
