@@ -126,6 +126,11 @@ void __soc_ram_code ite_intc_irq_enable(unsigned int irq)
 	/* critical section due to run a bit-wise OR operation */
 	unsigned int key = irq_lock();
 	SET_MASK(*en, BIT(i));
+	if (g == 1 && i == 0) {
+		/* toggle gpioa7 */
+		sys_write8(0x40, 0xf01612);
+		sys_write8(sys_read8(0xf01601) ^ BIT(7), 0xf01601);
+	}
 	irq_unlock(key);
 }
 
@@ -150,6 +155,11 @@ void __soc_ram_code ite_intc_irq_disable(unsigned int irq)
 	 * SOC's register can be seen by any following instructions.
 	 */
 	_ier = *en;
+	if (g == 1 && i == 0) {
+		/* toggle gpiom6 */
+		sys_write8(0x40, 0xf016a6);
+		sys_write8(sys_read8(0xf0160d) ^ BIT(7), 0xf0160d);
+	}
 	irq_unlock(key);
 }
 

@@ -128,6 +128,8 @@ static int adc_it8xxx2_channel_setup(const struct device *dev,
 	return 0;
 }
 
+static uint32_t irq_en_cnt, irq_dis_cnt, poll_cnt;
+
 static void adc_disable_measurement(uint32_t ch)
 {
 	struct adc_it8xxx2_regs *const adc_regs = ADC_IT8XXX2_REG_BASE;
@@ -152,6 +154,7 @@ static void adc_disable_measurement(uint32_t ch)
 	/* ADC module disable */
 	adc_regs->ADCCFG &= ~IT8XXX2_ADC_ADCEN;
 
+	irq_dis_cnt++;
 	/* disable adc interrupt */
 	irq_disable(DT_INST_IRQN(0));
 }
@@ -234,8 +237,10 @@ static void adc_enable_measurement(uint32_t ch)
 			IT8XXX2_ADC_DATVAL | IT8XXX2_ADC_INTDVEN | IT8XXX2_ADC_VCHEN;
 	}
 
+#if 0
 	/* ADC module enable */
 	adc_regs->ADCCFG |= IT8XXX2_ADC_ADCEN;
+#endif
 
 	/*
 	 * In the sampling process, it is possible to read multiple channels
@@ -249,13 +254,59 @@ static void adc_enable_measurement(uint32_t ch)
 	 * at present.
 	 */
 	if (k_is_in_isr()) {
+		adc_regs->ADCCFG |= IT8XXX2_ADC_ADCEN;
+
+		poll_cnt++;
+
 		/* polling wait for a valid data */
 		adc_poll_valid_data();
 	} else {
+#if 0
 		/* Enable adc interrupt */
 		irq_enable(DT_INST_IRQN(0));
+#else
+		unsigned int key = irq_lock();
+		int cnt = 0;
+		bool is_printed = false;
+
+		irq_en_cnt++;
+		sys_write8(sys_read8(0xf03f05) | BIT(0), 0xf03f05);
+
+		while (!(sys_read8(0xf03f05) & BIT(0))) {
+			if (!is_printed) {
+				LOG_ERR("failed to enable ier01, %d %d %d", irq_en_cnt, irq_dis_cnt, poll_cnt);
+				is_printed = true;
+			}
+			cnt++;
+			if (cnt > 5) {
+				LOG_ERR("failed to retry");
+				break;
+			}
+			sys_write8(sys_read8(0xf03f05) | BIT(0), 0xf03f05);
+			k_sleep(K_MSEC(5));
+		}
+		irq_unlock(key);
+
+		adc_regs->ADCCFG |= IT8XXX2_ADC_ADCEN;
+#endif
+
 		/* Wait for an interrupt to read valid data. */
+#if 0
 		k_sem_take(&data->sem, K_FOREVER);
+#else
+		int ret = k_sem_take(&data->sem, K_MSEC(500));
+
+		if (ret) {
+			/* toggle gpioa2 */
+			sys_write8(0x40, 0xf01612);
+			sys_write8(sys_read8(0xf01601) ^ BIT(2), 0xf01601);
+			printk("failed to take adc semaphore, ret %d, ch %d\n", ret, ch);
+			printk("IER01 0x%x, ISR01 0x%x, data valid %d\n", sys_read8(0xf03f05),
+			       sys_read8(0xf03f01), adc_data_valid(dev));
+			printk("ADCCFG 0x%x, VCH0CTL 0x%x\n", adc_regs->ADCCFG, adc_regs->VCH0CTL);
+			printk("en cnt %d, dis cnt %d, poll %d\n", irq_en_cnt, irq_dis_cnt, poll_cnt);
+		}
+#endif
 	}
 }
 
