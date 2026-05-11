@@ -115,17 +115,27 @@ void __soc_ram_code ite_intc_irq_enable(unsigned int irq)
 {
 	uint32_t g, i;
 	volatile uint8_t *en;
+	volatile uint8_t _ier __unused;
 
 	if (irq > CONFIG_NUM_IRQS) {
 		return;
 	}
+
+	/* critical section due to run a bit-wise OR operation */
+	unsigned int key = irq_lock();
+
 	g = irq / MAX_REGISR_IRQ_NUM;
 	i = irq % MAX_REGISR_IRQ_NUM;
 	en = reg_enable[g];
 
+#if 0
 	/* critical section due to run a bit-wise OR operation */
 	unsigned int key = irq_lock();
-	SET_MASK(*en, BIT(i));
+#endif
+	/* TODO: ITE Debug: dummy read to ensure cpu irq is locked */
+	_ier = *en;
+	SET_MASK(*en ,BIT(i));
+	_ier = *en;
 	irq_unlock(key);
 }
 
@@ -138,12 +148,19 @@ void __soc_ram_code ite_intc_irq_disable(unsigned int irq)
 	if (irq > CONFIG_NUM_IRQS) {
 		return;
 	}
-	g = irq / MAX_REGISR_IRQ_NUM;
-	i = irq % MAX_REGISR_IRQ_NUM;
-	en = reg_enable[g];
 
 	/* critical section due to run a bit-wise OR operation */
 	unsigned int key = irq_lock();
+
+	g = irq / MAX_REGISR_IRQ_NUM;
+	i = irq % MAX_REGISR_IRQ_NUM;
+	en = reg_enable[g];
+#if 0
+	/* critical section due to run a bit-wise OR operation */
+	unsigned int key = irq_lock();
+#endif
+	/* TODO: ITE Debug: dummy read to ensure cpu irq is locked */
+	_ier = *en;
 	CLEAR_MASK(*en, BIT(i));
 	/*
 	 * This load operation will guarantee the above modification of

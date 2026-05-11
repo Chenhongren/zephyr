@@ -1018,7 +1018,9 @@ static int i2c_it8xxx2_transfer(const struct device *dev, struct i2c_msg *msgs,
 		 * wake up during suspend(ex: interrupt is not fired),
 		 * the irq should be disabled immediately.
 		 */
+#if 0
 		irq_disable(config->i2c_irq_base);
+#endif
 		/*
 		 * The transaction is dropped on any error(timeout, NACK, fail,
 		 * bus error, device error).
