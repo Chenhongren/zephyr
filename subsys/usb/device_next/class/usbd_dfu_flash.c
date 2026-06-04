@@ -14,7 +14,8 @@
 #include <zephyr/dfu/flash_img.h>
 
 #include <zephyr/logging/log.h>
-LOG_MODULE_REGISTER(dfu_flash, CONFIG_USBD_DFU_LOG_LEVEL);
+// LOG_MODULE_REGISTER(dfu_flash, CONFIG_USBD_DFU_LOG_LEVEL);
+LOG_MODULE_REGISTER(dfu_flash, LOG_LEVEL_DBG);
 
 /*
  * This file implements the flash backend for the USB DFU implementation. The

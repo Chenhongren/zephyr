@@ -48,6 +48,10 @@
 		};
 	};
 
+	chosen {
+		zephyr,code-partition = &slot0_partition;
+	};
+
 	soc {
 		#address-cells = <1>;
 		#size-cells = <1>;
@@ -68,6 +72,36 @@
 				write-block-size = <4>;
 				#address-cells = <1>;
 				#size-cells = <1>;
+
+				partitions {
+					ranges;
+					#address-cells = <1>;
+					#size-cells = <1>;
+
+					boot_partition: partition@0 {
+						compatible = "zephyr,mapped-partition";
+						label = "mcuboot";
+						reg = <0x00000000 0x20000>;
+					};
+
+					slot0_partition: partition@20000 {
+						compatible = "zephyr,mapped-partition";
+						label = "image-0";
+						reg = <0x00020000 0x30000>;
+					};
+
+					slot1_partition: partition@50000 {
+						compatible = "zephyr,mapped-partition";
+						label = "image-1";
+						reg = <0x00050000 0x30000>;
+					};
+
+					storage_partition: partition@80000 {
+						compatible = "zephyr,mapped-partition";
+						label = "storage";
+						reg = <0x00080000 0x00008000>;
+					};
+				};
 			};
 		};
 

@@ -351,7 +351,7 @@ static inline int inspect_device(const struct stream_flash_ctx *ctx)
 		LOG_ERR("Device seems to have 0 size");
 		return -EFAULT;
 	} else if (inspect_flash_ctx.total_size < (ctx->offset + ctx->available)) {
-		LOG_ERR("Requested range overflows device size");
+		LOG_ERR("Requested range overflows device size %d %d %d", inspect_flash_ctx.total_size, ctx->offset, ctx->available);
 		return -EFAULT;
 	}
 

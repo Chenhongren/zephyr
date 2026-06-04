@@ -16,7 +16,7 @@
 
 #define LOG_LEVEL CONFIG_DISK_LOG_LEVEL
 #include <zephyr/logging/log.h>
-LOG_MODULE_REGISTER(disk);
+LOG_MODULE_REGISTER(disk, LOG_LEVEL_INF);
 
 /* list of mounted file systems */
 static sys_dlist_t disk_access_list = SYS_DLIST_STATIC_INIT(&disk_access_list);
@@ -34,6 +34,8 @@ struct disk_info *disk_access_get_di(const char *name)
 	SYS_DLIST_FOR_EACH_NODE(&disk_access_list, node) {
 		itr = CONTAINER_OF(node, struct disk_info, node);
 
+		LOG_ERR("registered disk='%s'", itr->name);
+
 		/*
 		 * Move to next node if mount point length is
 		 * shorter than longest_match match or if path
@@ -45,6 +47,7 @@ struct disk_info *disk_access_get_di(const char *name)
 
 		/* Check for disk name match */
 		if (strncmp(name, itr->name, name_len) == 0) {
+			LOG_ERR("matched disk='%s'", itr->name);
 			disk = itr;
 			break;
 		}
@@ -58,6 +61,10 @@ int disk_access_init(const char *pdrv)
 {
 	struct disk_info *disk = disk_access_get_di(pdrv);
 	int rc = -EINVAL;
+
+	if (!disk) {
+		LOG_ERR("ite debug null disk %s", pdrv);
+	}
 
 	if ((disk != NULL) && (disk->refcnt == 0U)) {
 		/* Disk has not been initialized, start it */
@@ -113,36 +120,6 @@ int disk_access_write(const char *pdrv, const uint8_t *data_buf,
 	if ((disk != NULL) && (disk->ops != NULL) &&
 				(disk->ops->write != NULL)) {
 		rc = disk->ops->write(disk, data_buf, start_sector, num_sector);
-	}
-
-	return rc;
-}
-
-int disk_access_erase(const char *pdrv, uint32_t start_sector, uint32_t num_sector,
-		      enum disk_access_erase_type erase_type)
-{
-	struct disk_info *disk = disk_access_get_di(pdrv);
-	uint32_t erase_sector_size;
-	int rc = -EINVAL;
-
-	/* Only support physical erase for now.
-	 * This parameter is not passed through to the underlying disk to leave the design
-	 * space open for future erase types (Other erase types may be dedicated functions).
-	 */
-	if (erase_type != DISK_ACCESS_ERASE_PHYSICAL) {
-		return -EINVAL;
-	}
-
-	/* Validate sector sizes, if underlying driver exposes a way to query it */
-	if (disk_access_ioctl(pdrv, DISK_IOCTL_GET_ERASE_BLOCK_SZ, &erase_sector_size) == 0) {
-		/* Alignment check on both start and range of erase request */
-		if ((start_sector % erase_sector_size) || (num_sector % erase_sector_size)) {
-			return -EINVAL;
-		}
-	}
-
-	if ((disk != NULL) && (disk->ops != NULL) && (disk->ops->erase != NULL)) {
-		rc = disk->ops->erase(disk, start_sector, num_sector);
 	}
 
 	return rc;

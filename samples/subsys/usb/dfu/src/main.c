@@ -60,21 +60,25 @@ static int init_dfu_ramdisk_data(struct dfu_ramdisk_data *const data)
 
 	err = disk_access_init(data->name);
 	if (err) {
+		LOG_ERR("%s ITE Debug %d, %d", __func__, __LINE__, err);
 		return err;
 	}
 
 	err = disk_access_status(data->name);
 	if (err) {
+		LOG_ERR("%s ITE Debug %d", __func__, __LINE__);
 		return err;
 	}
 
 	err = disk_access_ioctl(data->name, DISK_IOCTL_GET_SECTOR_COUNT, &data->sector_count);
 	if (err) {
+		LOG_ERR("%s ITE Debug %d", __func__, __LINE__);
 		return err;
 	}
 
 	err = disk_access_ioctl(data->name, DISK_IOCTL_GET_SECTOR_SIZE, &data->sector_size);
 	if (err) {
+		LOG_ERR("%s ITE Debug %d", __func__, __LINE__);
 		return err;
 	}
 
@@ -134,6 +138,7 @@ static int ramdisk_write(void *const priv, const uint32_t block, const uint16_t 
 	struct dfu_ramdisk_data *const data = priv;
 	int err;
 
+	LOG_ERR("ite debug block %d", block);
 	if (block == 0) {
 		if (init_dfu_ramdisk_data(data)) {
 			LOG_ERR("Failed to init ramdisk data");
@@ -211,6 +216,7 @@ static void switch_to_dfu_mode(struct usbd_context *const ctx)
 	LOG_INF("Detach USB device");
 	usbd_disable(ctx);
 	usbd_shutdown(ctx);
+	// k_sleep(K_MSEC(1000));
 
 	err = usbd_add_descriptor(&dfu_usbd, &sample_lang);
 	if (err) {

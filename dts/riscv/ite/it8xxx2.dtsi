@@ -64,16 +64,38 @@
 			reg = <0x00f01000 0x100>;
 			#address-cells = <1>;
 			#size-cells = <1>;
-			ranges;
 
 			flash0: flash@80000000 {
 				compatible = "soc-nv-flash";
 				reg = <0x80000000 DT_SIZE_M(1)>;
-				ranges = <0 0x80000000 DT_SIZE_M(1)>;
 				erase-block-size = <4096>;
 				write-block-size = <4>;
 				#address-cells = <1>;
 				#size-cells = <1>;
+
+				partitions {
+					ranges;
+					#address-cells = <1>;
+					#size-cells = <1>;
+
+					boot_partition: partition@80000000 {
+						compatible = "zephyr,mapped-partition";
+						label = "mcuboot";
+						reg = <0x80000000 0x20000>;
+					};
+
+					slot0_partition: partition@80020000 {
+						compatible = "zephyr,mapped-partition";
+						label = "image0";
+						reg = <0x80020000 0x30000>;
+					};
+
+					slot1_partition: partition@80050000 {
+						compatible = "zephyr,mapped-partition";
+						label = "image1";
+						reg = <0x80050000 0x30000>;
+					};
+				};
 			};
 		};
 
