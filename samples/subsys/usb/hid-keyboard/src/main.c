@@ -266,7 +266,7 @@ int main(void)
 		switch (kb_evt.code) {
 		case INPUT_KEY_0:
 			if (kb_evt.value) {
-				report[KB_KEY_CODE1] = HID_KEY_NUMLOCK;
+				report[KB_KEY_CODE1] = HID_KEY_A;
 			} else {
 				report[KB_KEY_CODE1] = 0;
 			}
@@ -274,7 +274,7 @@ int main(void)
 			break;
 		case INPUT_KEY_1:
 			if (kb_evt.value) {
-				report[KB_KEY_CODE2] = HID_KEY_CAPSLOCK;
+				report[KB_KEY_CODE2] = HID_KEY_B;
 			} else {
 				report[KB_KEY_CODE2] = 0;
 			}
@@ -282,7 +282,7 @@ int main(void)
 			break;
 		case INPUT_KEY_2:
 			if (kb_evt.value) {
-				report[KB_KEY_CODE3] = HID_KEY_SCROLLLOCK;
+				report[KB_KEY_CODE3] = HID_KEY_C;
 			} else {
 				report[KB_KEY_CODE3] = 0;
 			}
@@ -290,15 +290,9 @@ int main(void)
 			break;
 		case INPUT_KEY_3:
 			if (kb_evt.value) {
-				report[KB_MOD_KEY] = HID_KBD_MODIFIER_RIGHT_ALT;
-				report[KB_KEY_CODE4] = HID_KEY_1;
-				report[KB_KEY_CODE5] = HID_KEY_2;
-				report[KB_KEY_CODE6] = HID_KEY_3;
+				report[KB_KEY_CODE4] = HID_KEY_D;
 			} else {
-				report[KB_MOD_KEY] = HID_KBD_MODIFIER_NONE;
 				report[KB_KEY_CODE4] = 0;
-				report[KB_KEY_CODE5] = 0;
-				report[KB_KEY_CODE6] = 0;
 			}
 
 			break;

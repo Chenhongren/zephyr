@@ -1,0 +1,30 @@
+/*
+ * Copyright (c) 2026 ITE Corporation. All Rights Reserved.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+&zephyr_udc0 {
+	status = "okay";
+
+	/* it5510.bw udc controller selects gpiof2/gpiof3 */
+	// extend-ctrl = <0xf016cf 0 1>;
+	// pinctrl-0 = <&uhc_ym_gpf2_default &uhc_yp_gpf3_default>;
+
+	/* it5510.bw udc controller selects gpiof4/gpiof5 */
+	pinctrl-0 = <&udc_dm_gpf4_default &udc_dp_gpf5_default>;
+	pinctrl-names = "default";
+	cdc_acm_uart0 {
+		compatible = "zephyr,cdc-acm-uart";
+		label = "Zephyr USB CDC-ACM";
+	};
+};
+
+&ecpm {
+	pll-frequency = <PLL_96000_KHZ>;
+};
+
+/* disable i2c0(gpiof2/gpiof3) if it5510.bw udc controller selects gpiof2/gpiof3 */
+&i2c0 {
+	status = "disabled";
+};

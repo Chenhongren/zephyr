@@ -220,6 +220,7 @@ static int gpio_keys_init(const struct device *dev)
 		LOG_ERR("Failed to enable runtime power management");
 		return ret;
 	}
+	pm_device_runtime_get(dev);
 
 	return 0;
 }
