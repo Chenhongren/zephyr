@@ -154,7 +154,9 @@ static void periph_handler(const struct device *dev, struct espi_callback *cb,
 		break;
 	case ESPI_PERIPHERAL_HOST_IO:
 		LOG_INF("ACPI %x", event.evt_data);
+#if 0 /* ite test */
 		espi_remove_callback(espi_dev, &p80_cb);
+#endif
 		break;
 	default:
 		LOG_INF("%s periph 0x%x [%x]", __func__, periph_type, event.evt_data);
