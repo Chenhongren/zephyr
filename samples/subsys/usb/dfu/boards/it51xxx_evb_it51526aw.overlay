@@ -1,0 +1,56 @@
+/*
+ * Copyright (c) 2026 ITE Corporation. All Rights Reserved.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+#include <zephyr/dt-bindings/input/input-event-codes.h>
+
+/ {
+	ramdisk0 {
+		compatible = "zephyr,ram-disk";
+		disk-name = "image0";
+		sector-size = <512>;
+		sector-count = <32>;
+	};
+
+	chosen {
+		zephyr,code-partition = &slot0_partition;
+	};
+};
+
+&zephyr_udc0 {
+	status = "okay";
+	pinctrl-0 = <&udc_dm_gpf4_default &udc_dp_gpf5_default>;
+	pinctrl-names = "default";
+};
+
+&ecpm {
+	pll-frequency = <PLL_96000_KHZ>;
+};
+
+&flash0 {
+	partitions {
+		ranges;
+		#address-cells = <1>;
+		#size-cells = <1>;
+
+		boot_partition: partition@0 {
+			compatible = "zephyr,mapped-partition";
+			label = "mcuboot";
+			reg = <0x00000000 0x20000>;
+		};
+
+		slot0_partition: partition@00020000 {
+			compatible = "zephyr,mapped-partition";
+			label = "image0";
+			reg = <0x00020000 0x30000>;
+		};
+
+		slot1_partition: partition@00050000 {
+			compatible = "zephyr,mapped-partition";
+			label = "image1";
+			reg = <0x00050000 0x30000>;
+		};
+	};
+};

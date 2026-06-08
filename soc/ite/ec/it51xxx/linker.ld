@@ -29,6 +29,10 @@
 #define ROM_END_OFFSET 0
 #endif
 
+#if defined(CONFIG_FLASH_USES_MAPPED_PARTITION) && defined(CONFIG_XIP)
+#define ROM_BASE (DT_REG_ADDR(DT_CHOSEN(zephyr_code_partition)))
+#define ROM_SIZE (DT_REG_SIZE(DT_CHOSEN(zephyr_code_partition)) - ROM_END_OFFSET)
+#else /* defined(CONFIG_FLASH_USES_MAPPED_PARTITION) && defined(CONFIG_XIP) */
 #if defined(CONFIG_FLASH_LOAD_OFFSET)
 #define FLASH_LOAD_OFFSET CONFIG_FLASH_LOAD_OFFSET
 #else
@@ -75,6 +79,7 @@
 #define ROM_BASE DT_CHOSEN_SRAM_ADDR
 #define ROM_SIZE (DT_CHOSEN_SRAM_SIZE - ROM_END_OFFSET)
 #endif /* CONFIG_XIP */
+#endif /* defined(CONFIG_FLASH_USES_MAPPED_PARTITION) && defined(CONFIG_XIP) */
 
 #define RAM_BASE DT_CHOSEN_SRAM_ADDR
 #define RAM_SIZE DT_CHOSEN_SRAM_SIZE

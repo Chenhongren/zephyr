@@ -23,6 +23,13 @@
 #define _EXCEPTION_SECTION_NAME     exceptions
 #define _RESET_SECTION_NAME         reset
 
+#if defined(CONFIG_FLASH_USES_MAPPED_PARTITION) && defined(CONFIG_XIP)
+
+#define ROM_BASE (DT_REG_ADDR(DT_CHOSEN(zephyr_code_partition)))
+#define ROM_SIZE (DT_REG_SIZE(DT_CHOSEN(zephyr_code_partition)))
+
+#else /* defined(CONFIG_FLASH_USES_MAPPED_PARTITION) && defined(CONFIG_XIP) */
+
 #ifdef CONFIG_XIP
 #if DT_NODE_HAS_COMPAT_STATUS(DT_CHOSEN(zephyr_flash), soc_nv_flash, okay)
 #ifdef CONFIG_FLASH_LOAD_OFFSET
@@ -45,6 +52,8 @@
 #define ROM_BASE DT_CHOSEN_SRAM_ADDR
 #define ROM_SIZE DT_CHOSEN_SRAM_SIZE
 #endif /* CONFIG_XIP */
+
+#endif /* defined(CONFIG_FLASH_USES_MAPPED_PARTITION) && defined(CONFIG_XIP) */
 
 #define RAM_BASE DT_CHOSEN_SRAM_ADDR
 #define RAM_SIZE DT_CHOSEN_SRAM_SIZE
