@@ -289,3 +289,15 @@ int main(void)
 
 	return 0;
 }
+
+static int confirm_image_init(void)
+{
+	if (!boot_is_img_confirmed()) {
+		LOG_INF("mark image is confirmed");
+		boot_write_img_confirmed();
+	}
+
+	return 0;
+}
+
+SYS_INIT(confirm_image_init, APPLICATION, 0);
