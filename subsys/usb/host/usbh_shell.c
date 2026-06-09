@@ -278,6 +278,7 @@ static int cmd_bulk(const struct shell *sh, size_t argc, char **argv)
 		return ret;
 	}
 
+#if 0 /* ITE Debug - interrupt xfer testing */
 	if (k_sem_take(&bulk_req_sync, K_MSEC(1000)) != 0) {
 		shell_print(sh, "host: Bulk transfer timeout");
 		ret = usbh_xfer_dequeue(udev, xfer);
@@ -290,6 +291,7 @@ static int cmd_bulk(const struct shell *sh, size_t argc, char **argv)
 	}
 
 	shell_print(sh, "host: Bulk transfer finished");
+#endif
 
 	return 0;
 }
