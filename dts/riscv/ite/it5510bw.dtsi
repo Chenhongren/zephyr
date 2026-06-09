@@ -153,6 +153,21 @@
 			#size-cells = <0>;
 			io-channel = <2>;
 		};
+
+		zephyr_uhc0: uhc0: uhc@f05600 {
+			compatible = "ite,it51xxx-uhc";
+			reg = <0xf05600 0xed>;
+			interrupt-parent = <&intc>;
+			interrupts = <IT51XXX_IRQ_UHC IRQ_TYPE_LEVEL_HIGH>;
+			/* it5510.bw uhc controller selects gpiof2/gpiof3 by default */
+			#extend-ctrl-cells = <3>;
+			ite,extend-ctrl = <&uhc0 0xf016cf BIT(2) BIT(3)>;
+			clocks = <&ecpm IT51XXX_ECPM_CGCTRL4R_OFF BIT(4)>;
+			dp-gpios = <&gpiof 2 0>;
+			dm-gpios = <&gpiof 3 0>;
+			status = "disabled";
+
+		};
 	};
 };
 
@@ -505,4 +520,9 @@
 
 &adc0 {
 	channel-count = <10>;
+};
+
+&usb0 {
+	#extend-ctrl-cells = <3>;
+	ite,extend-ctrl = <&usb0 0xf016cf BIT(1) BIT(0)>;
 };
