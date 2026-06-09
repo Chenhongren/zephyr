@@ -142,6 +142,16 @@
 			reg = <0x00f053f0 0xf>;
 			status = "disabled";
 		};
+
+		zephyr_uhc0: uhc@f05600 {
+			compatible = "ite,it51xxx-uhc";
+			reg = <0xf05600 0xed>;
+			interrupt-parent = <&intc>;
+			interrupts = <IT51XXX_IRQ_UHC IRQ_TYPE_LEVEL_HIGH>;
+			/* it5510.bw uhc controller selects gpiof2/gpiof3 by default */
+			extend-ctrl = <0xf016cf 2 3>;
+			status = "disabled";
+		};
 	};
 };
 

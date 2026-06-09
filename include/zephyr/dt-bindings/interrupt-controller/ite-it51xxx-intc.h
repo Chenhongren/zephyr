@@ -246,6 +246,7 @@
 #define IT51XXX_IRQ_WU182      270
 #define IT51XXX_IRQ_WU183      271
 /* Group 34 */
+#define IT51XXX_IRQ_UHC        272
 #define IT51XXX_IRQ_WU143      273
 /** @endcond */
 
