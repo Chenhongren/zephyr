@@ -14,6 +14,22 @@
 		sector-count = <32>;
 	};
 
+	mouse_dev: mouse_dev {
+		compatible = "zephyr,hid-device";
+		label = "HID0";
+		protocol-code = "none";
+		in-report-size = <64>;
+		in-polling-period-us = <1000>;
+	};
+
+	keyboard_dev: keyboard_dev {
+		compatible = "zephyr,hid-device";
+		label = "HID0";
+		protocol-code = "keyboard";
+		in-report-size = <64>;
+		in-polling-period-us = <1000>;
+	};
+
 	chosen {
 		zephyr,code-partition = &slot0_partition;
 	};
@@ -23,6 +39,11 @@
 	status = "okay";
 	pinctrl-0 = <&udc_dm_gpf4_default &udc_dp_gpf5_default>;
 	pinctrl-names = "default";
+
+	cdc_acm_uart0 {
+		compatible = "zephyr,cdc-acm-uart";
+		label = "Zephyr USB CDC-ACM";
+	};
 };
 
 &ecpm {
