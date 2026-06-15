@@ -36,6 +36,19 @@ static inline void print_baudrate(const struct device *dev)
 		LOG_WRN("Failed to get baudrate, ret code %d", ret);
 	} else {
 		LOG_INF("Baudrate %u", baudrate);
+		if (baudrate == 115200) {
+			k_msleep(3000);
+#if CONFIG_SOC_IT51XXX
+			sys_write8(0x44, 0xf01610);
+#endif
+#if CONFIG_SOC_IT8XXX2
+			sys_write8(0x44, 0xf01660);
+#endif
+			sys_write8(sys_read8(0xf01601) | BIT(0), 0xf01601);
+			k_msleep(10);
+			sys_write8(sys_read8(0xf01601) & ~BIT(0), 0xf01601);
+			k_msleep(10);
+		}
 	}
 }
 
