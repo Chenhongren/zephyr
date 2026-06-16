@@ -29,7 +29,8 @@ static uint8_t lb_buf[1024];
 #define LB_VENDOR_REQ_OUT		0x5b
 #define LB_VENDOR_REQ_IN		0x5c
 
-#define LB_ISO_EP_MPS			256
+/* Isochronous endpoint MPS: 1024 bytes for HS, 64 bytes for FS */
+#define LB_ISO_EP_MPS			(USBD_SUPPORTS_HIGH_SPEED ? 1024 : 64)
 #define LB_ISO_EP_INTERVAL		1
 
 #define LB_FUNCTION_ENABLED		0
