@@ -11,6 +11,14 @@ config UDC_IT51XXX
 
 if UDC_IT51XXX
 
+config UDC_IT51XXX_CLEAR_READY_BIT_SUPPORTED
+	bool
+	default y if !SOC_IT51526AW && !SOC_IT51526BW
+	help
+	  Indicates whether the IT51XXX UDC IP supports firmware clearing of
+	  the ready bit. If not supported, the driver clears the enable bit
+	  instead when disabling or dequeuing endpoint.
+
 config UDC_IT51XXX_EVENT_COUNT
 	int "UDC IT51XXX event count"
 	range 4 64
@@ -25,5 +33,11 @@ config UDC_IT51XXX_STACK_SIZE
 	help
 	  Size of the stack used in the driver for IT51XXX USBD ISR event
 	  handling.
+
+config UDC_IT51XXX_THREAD_PRIORITY
+	int "IT51XXX UDC driver internal thread priority"
+	default 8
+	help
+	  IT51XXX UDC driver internal thread priority.
 
 endif # UDC_IT51XXX
