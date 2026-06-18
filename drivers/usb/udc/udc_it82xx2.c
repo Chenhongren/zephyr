@@ -352,6 +352,23 @@ static int it82xx2_usb_ep_ctrl(const struct device *dev, uint8_t ep, enum it82xx
 	return 0;
 }
 
+static bool ep_ready_bit_is_set(const struct device *dev, const uint8_t ep_idx)
+{
+	const struct usb_it82xx2_config *config = dev->config;
+	struct usb_it82xx2_regs *const usb_regs = config->base;
+	struct it82xx2_usb_ep_regs *ep_regs = usb_regs->usb_ep_regs;
+	struct epn_ext_ctrl_regs *ext_ctrl =
+		usb_regs->fifo_regs[EP_EXT_REGS_DX].ext_0_3.epn_ext_ctrl;
+
+	if (IT8XXX2_IS_EXTEND_ENDPOINT(ep_idx)) {
+		int idx = ((ep_idx - 4) % 3) + 1;
+
+		return ext_ctrl[idx].epn_ext_ctrl2 & BIT((ep_idx - 4) / 3);
+	}
+
+	return (ep_regs[ep_idx].ep_ctrl.value & ENDPOINT_READY_BIT);
+}
+
 static int it82xx2_usb_set_ep_ctrl(const struct device *dev, uint8_t ep, enum it82xx2_ep_ctrl ctrl,
 				   bool enable)
 {
@@ -525,6 +542,10 @@ static int it82xx2_ep_dequeue(const struct device *dev, struct udc_ep_config *co
 
 	udc_ep_set_busy(cfg, false);
 
+	if (USB_EP_GET_IDX(cfg->addr)) {
+		it82xx2_usb_set_ep_ctrl(dev, cfg->addr, EP_ENABLE, false);
+	}
+
 	return 0;
 }
 
@@ -569,7 +590,6 @@ static int it82xx2_ep_set_halt(const struct device *dev, struct udc_ep_config *c
 		ctrl_ep_stall_workaround(dev);
 	} else {
 		it82xx2_usb_set_ep_ctrl(dev, ep_idx, EP_STALL_SEND, true);
-		it82xx2_usb_set_ep_ctrl(dev, ep_idx, EP_READY_ENABLE, true);
 	}
 
 	LOG_DBG("Endpoint 0x%x is halted", cfg->addr);
@@ -582,6 +602,7 @@ static int it82xx2_ep_clear_halt(const struct device *dev, struct udc_ep_config 
 	const uint8_t ep_idx = USB_EP_GET_IDX(cfg->addr);
 
 	it82xx2_usb_set_ep_ctrl(dev, ep_idx, EP_STALL_SEND, false);
+	it82xx2_usb_set_ep_ctrl(dev, cfg->addr, EP_DATA_SEQ_1, false);
 
 	LOG_DBG("Endpoint 0x%x clear halted", cfg->addr);
 
@@ -618,16 +639,21 @@ static int it82xx2_ep_enable(const struct device *dev, struct udc_ep_config *con
 		default:
 			return -ENOTSUP;
 		}
+	} else {
+		it82xx2_usb_set_ep_ctrl(dev, ep_idx, EP_ENABLE, true);
+		return 0;
 	}
 
-	if (IT8XXX2_IS_EXTEND_ENDPOINT(ep_idx)) {
-		uint8_t fifo_idx;
+	if (!ep_ready_bit_is_set(dev, ep_idx)) {
+		if (IT8XXX2_IS_EXTEND_ENDPOINT(ep_idx)) {
+			uint8_t fifo_idx;
 
-		fifo_idx = ep_fifo_res[ep_idx % SHARED_FIFO_NUM];
-		it82xx2_usb_set_ep_ctrl(dev, fifo_idx, EP_ENABLE, true);
+			fifo_idx = ep_fifo_res[ep_idx % SHARED_FIFO_NUM];
+			it82xx2_usb_set_ep_ctrl(dev, fifo_idx, EP_ENABLE, true);
+		}
+
+		it82xx2_usb_set_ep_ctrl(dev, ep_idx, EP_ENABLE, true);
 	}
-
-	it82xx2_usb_set_ep_ctrl(dev, ep_idx, EP_ENABLE, true);
 
 	LOG_DBG("Endpoint 0x%02x is enabled", cfg->addr);
 
@@ -780,7 +806,9 @@ static int it82xx2_xfer_in_data(const struct device *dev, uint8_t ep, struct net
 			it82xx2_usb_set_ep_ctrl(dev, ep, EP_DATA_SEQ_1, true);
 		}
 	} else {
+#if 0
 		k_sem_take(&priv->fifo_sem[fifo_idx - 1], K_FOREVER);
+#endif
 		key = irq_lock();
 		it82xx2_usb_fifo_ctrl(dev, ep, false);
 	}
@@ -792,6 +820,7 @@ static int it82xx2_xfer_in_data(const struct device *dev, uint8_t ep, struct net
 	}
 
 	it82xx2_usb_set_ep_ctrl(dev, ep_idx, EP_READY_ENABLE, true);
+	it82xx2_usb_set_ep_ctrl(dev, ep, EP_ENABLE, true);
 	if (ep_idx != 0) {
 		irq_unlock(key);
 	}
@@ -864,6 +893,7 @@ static int work_handler_xfer_continue(const struct device *dev, uint8_t ep, stru
 			atomic_set_bit(&priv->out_fifo_state, IT82xx2_STATE_OUT_SHARED_FIFO_BUSY);
 		}
 		it82xx2_usb_set_ep_ctrl(dev, ep_idx, EP_READY_ENABLE, true);
+		it82xx2_usb_set_ep_ctrl(dev, ep_idx, EP_ENABLE, true);
 		if (ep_idx != 0) {
 			irq_unlock(key);
 		}
@@ -1127,23 +1157,26 @@ static inline int work_handler_out(const struct device *dev, uint8_t ep)
 
 	LOG_DBG("Handle data OUT, %zu | %zu", len, net_buf_tailroom(buf));
 
+	udc_ep_set_busy(ep_cfg, false);
+
+	if (ep != USB_CONTROL_EP_OUT) {
+		atomic_clear_bit(&priv->out_fifo_state, IT82xx2_STATE_OUT_SHARED_FIFO_BUSY);
+	}
+
 	if (net_buf_tailroom(buf) && len == udc_mps_ep_size(ep_cfg)) {
-		work_handler_xfer_continue(dev, ep, buf);
-		if (ep != USB_CONTROL_EP_OUT) {
-			err = udc_submit_ep_event(dev, buf, 0);
+		/* For non-control endpoints, the next out transfer will be started outside
+		 * this function. Do nothing here to avoid triggering it twice.
+		 */
+		if (ep == USB_CONTROL_EP_OUT) {
+			work_handler_xfer_continue(dev, ep, buf);
 		}
-		return err;
+
+		return 0;
 	}
 
 	buf = udc_buf_get(ep_cfg);
 	if (buf == NULL) {
 		return -ENODATA;
-	}
-
-	udc_ep_set_busy(ep_cfg, false);
-
-	if (ep != USB_CONTROL_EP_OUT) {
-		atomic_clear_bit(&priv->out_fifo_state, IT82xx2_STATE_OUT_SHARED_FIFO_BUSY);
 	}
 
 	err = udc_submit_ep_event(dev, buf, 0);
