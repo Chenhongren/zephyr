@@ -96,8 +96,6 @@ enum it82xx2_event_type {
 };
 
 struct it82xx2_ep_event {
-	sys_snode_t node;
-	const struct device *dev;
 	uint8_t ep;
 	enum it82xx2_event_type event;
 };
@@ -469,7 +467,6 @@ static void it82xx2_event_submit(const struct device *dev, const uint8_t ep,
 {
 	struct it82xx2_ep_event evt;
 
-	evt.dev = dev;
 	evt.ep = ep;
 	evt.event = event;
 	k_msgq_put(&evt_msgq, &evt, K_NO_WAIT);
@@ -1163,17 +1160,17 @@ static void xfer_work_handler(const struct device *dev)
 
 		k_msgq_get(&evt_msgq, &evt, K_FOREVER);
 
-		ep_cfg = udc_get_ep_cfg(evt.dev, evt.ep);
+		ep_cfg = udc_get_ep_cfg(dev, evt.ep);
 
 		switch (evt.event) {
 		case IT82xx2_EVT_SETUP_TOKEN:
-			err = work_handler_setup(evt.dev, evt.ep);
+			err = work_handler_setup(dev, evt.ep);
 			break;
 		case IT82xx2_EVT_IN_TOKEN:
-			err = work_handler_in(evt.dev, evt.ep);
+			err = work_handler_in(dev, evt.ep);
 			break;
 		case IT82xx2_EVT_OUT_TOKEN:
-			err = work_handler_out(evt.dev, evt.ep);
+			err = work_handler_out(dev, evt.ep);
 			break;
 		case IT82xx2_EVT_XFER:
 			if (evt.ep == USB_CONTROL_EP_OUT) {
@@ -1187,7 +1184,7 @@ static void xfer_work_handler(const struct device *dev)
 		}
 
 		if (err) {
-			udc_submit_event(evt.dev, UDC_EVT_ERROR, err);
+			udc_submit_event(dev, UDC_EVT_ERROR, err);
 		}
 
 		if (evt.ep != USB_CONTROL_EP_OUT && !udc_ep_is_busy(ep_cfg)) {
