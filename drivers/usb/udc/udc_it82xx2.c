@@ -513,6 +513,10 @@ static int it82xx2_ep_enqueue(const struct device *dev, struct udc_ep_config *co
 		}
 	}
 
+	if (USB_EP_GET_IDX(cfg->addr) && cfg->stat.halted) {
+		return 0;
+	}
+
 	it82xx2_event_submit(dev, cfg->addr, IT82xx2_EVT_XFER);
 	return 0;
 }
@@ -524,6 +528,7 @@ static int it82xx2_ep_dequeue(const struct device *dev, struct udc_ep_config *co
 	const bool irq_enabled = irq_is_enabled(config->usb_irq);
 	struct usb_it82xx2_regs *const usb_regs = config->base;
 	struct it82xx2_usb_ep_fifo_regs *ff_regs = usb_regs->fifo_regs;
+	struct it82xx2_data *priv = udc_get_private(dev);
 	uint8_t fifo_idx;
 
 	fifo_idx = ep_idx > 0 ? ep_fifo_res[ep_idx % SHARED_FIFO_NUM] : 0;
@@ -532,10 +537,18 @@ static int it82xx2_ep_dequeue(const struct device *dev, struct udc_ep_config *co
 		irq_disable(config->usb_irq);
 	}
 
+	it82xx2_usb_set_ep_ctrl(dev, ep_idx, EP_ENABLE, false);
+
 	if (USB_EP_DIR_IS_IN(cfg->addr)) {
 		ff_regs[fifo_idx].ep_tx_fifo_ctrl = FIFO_FORCE_EMPTY;
+		if (ep_idx) {
+			k_sem_give(&priv->fifo_sem[fifo_idx - 1]);
+		}
 	} else {
 		ff_regs[fifo_idx].ep_rx_fifo_ctrl = FIFO_FORCE_EMPTY;
+		if (ep_idx) {
+			atomic_clear_bit(&priv->out_fifo_state, IT82xx2_STATE_OUT_SHARED_FIFO_BUSY);
+		}
 	}
 
 	if (irq_enabled) {
@@ -582,15 +595,44 @@ static inline void ctrl_ep_stall_workaround(const struct device *dev)
 	irq_unlock(lock_key);
 }
 
+static bool get_extend_ready_bit(const struct device *dev, const uint8_t ep_idx)
+{
+	const struct usb_it82xx2_config *config = dev->config;
+	struct usb_it82xx2_regs *const usb_regs = config->base;
+	struct epn_ext_ctrl_regs *ext_ctrl =
+		usb_regs->fifo_regs[EP_EXT_REGS_DX].ext_0_3.epn_ext_ctrl;
+	int idx = ((ep_idx - 4) % 3) + 1;
+
+	return ((ext_ctrl[idx].epn_ext_ctrl2 & BIT((ep_idx - 4) / 3)) != 0);
+}
+
+static bool it82xx2_ep_ready(const struct device *dev, const uint8_t ep_idx)
+{
+	const struct usb_it82xx2_config *config = dev->config;
+	struct usb_it82xx2_regs *const usb_regs = config->base;
+	struct it82xx2_usb_ep_regs *ep_regs = usb_regs->usb_ep_regs;
+
+	if (IT8XXX2_IS_EXTEND_ENDPOINT(ep_idx)) {
+		return get_extend_ready_bit(dev, ep_idx);
+	}
+
+	return ep_regs[ep_idx].ep_ctrl.fields.ready_bit;
+}
+
 static int it82xx2_ep_set_halt(const struct device *dev, struct udc_ep_config *const cfg)
 {
+	struct it82xx2_data *priv = udc_get_private(dev);
 	const uint8_t ep_idx = USB_EP_GET_IDX(cfg->addr);
 
 	if (ep_idx == 0) {
 		ctrl_ep_stall_workaround(dev);
 	} else {
+		cfg->stat.halted = true;
 		it82xx2_usb_set_ep_ctrl(dev, ep_idx, EP_STALL_SEND, true);
-		it82xx2_usb_set_ep_ctrl(dev, ep_idx, EP_READY_ENABLE, true);
+		if (USB_EP_DIR_IS_OUT(cfg->addr) && !it82xx2_ep_ready(dev, ep_idx)) {
+			atomic_set_bit(&priv->out_fifo_state, IT82xx2_STATE_OUT_SHARED_FIFO_BUSY);
+			it82xx2_usb_set_ep_ctrl(dev, ep_idx, EP_READY_ENABLE, true);
+		}
 	}
 
 	LOG_DBG("Endpoint 0x%x is halted", cfg->addr);
@@ -600,9 +642,29 @@ static int it82xx2_ep_set_halt(const struct device *dev, struct udc_ep_config *c
 
 static int it82xx2_ep_clear_halt(const struct device *dev, struct udc_ep_config *const cfg)
 {
+	struct it82xx2_data *priv = udc_get_private(dev);
 	const uint8_t ep_idx = USB_EP_GET_IDX(cfg->addr);
+	uint8_t fifo_idx = ep_idx > 0 ? ep_fifo_res[ep_idx % SHARED_FIFO_NUM] : 0;
 
 	it82xx2_usb_set_ep_ctrl(dev, ep_idx, EP_STALL_SEND, false);
+
+	/* re-initialize the data toggle to data0 */
+	it82xx2_usb_set_ep_ctrl(dev, ep_idx, EP_DATA_SEQ_1, false);
+
+	if (ep_idx) {
+		cfg->stat.halted = false;
+		it82xx2_usb_set_ep_ctrl(dev, ep_idx, EP_ENABLE, false);
+
+		if (udc_buf_peek(cfg)) {
+			if (USB_EP_DIR_IS_IN(cfg->addr)) {
+				k_sem_give(&priv->fifo_sem[fifo_idx - 1]);
+			}
+			if (udc_ep_is_busy(cfg)) {
+				udc_ep_set_busy(cfg, false);
+			}
+			it82xx2_event_submit(dev, cfg->addr, IT82xx2_EVT_XFER);
+		}
+	}
 
 	LOG_DBG("Endpoint 0x%x clear halted", cfg->addr);
 
@@ -641,14 +703,15 @@ static int it82xx2_ep_enable(const struct device *dev, struct udc_ep_config *con
 		}
 	}
 
-	if (IT8XXX2_IS_EXTEND_ENDPOINT(ep_idx)) {
-		uint8_t fifo_idx;
+	if (ep_idx == 0 || !it82xx2_ep_ready(dev, ep_idx)) {
+		if (IT8XXX2_IS_EXTEND_ENDPOINT(ep_idx)) {
+			uint8_t fifo_idx;
 
-		fifo_idx = ep_fifo_res[ep_idx % SHARED_FIFO_NUM];
-		it82xx2_usb_set_ep_ctrl(dev, fifo_idx, EP_ENABLE, true);
+			fifo_idx = ep_fifo_res[ep_idx % SHARED_FIFO_NUM];
+			it82xx2_usb_set_ep_ctrl(dev, fifo_idx, EP_ENABLE, true);
+		}
+		it82xx2_usb_set_ep_ctrl(dev, ep_idx, EP_ENABLE, true);
 	}
-
-	it82xx2_usb_set_ep_ctrl(dev, ep_idx, EP_ENABLE, true);
 
 	LOG_DBG("Endpoint 0x%02x is enabled", cfg->addr);
 
@@ -795,8 +858,8 @@ static int it82xx2_xfer_in_data(const struct device *dev, uint8_t ep, struct net
 	size_t len;
 
 	fifo_idx = ep_idx > 0 ? ep_fifo_res[ep_idx % SHARED_FIFO_NUM] : 0;
+	ff_regs[fifo_idx].ep_tx_fifo_ctrl = FIFO_FORCE_EMPTY;
 	if (ep_idx == 0) {
-		ff_regs[ep_idx].ep_tx_fifo_ctrl = FIFO_FORCE_EMPTY;
 		if (udc_get_buf_info(buf)->status) {
 			it82xx2_usb_set_ep_ctrl(dev, ep, EP_DATA_SEQ_1, true);
 		}
@@ -815,11 +878,17 @@ static int it82xx2_xfer_in_data(const struct device *dev, uint8_t ep, struct net
 	}
 
 	it82xx2_usb_set_ep_ctrl(dev, ep_idx, EP_READY_ENABLE, true);
+
+	if (IT8XXX2_IS_EXTEND_ENDPOINT(ep_idx)) {
+		it82xx2_usb_set_ep_ctrl(dev, fifo_idx, EP_ENABLE, true);
+	}
+	it82xx2_usb_set_ep_ctrl(dev, ep_idx, EP_ENABLE, true);
+
 	if (ep_idx != 0 && irq_enabled) {
 		irq_enable(config->usb_irq);
 	}
 
-	LOG_DBG("Writed %d packets to endpoint%d tx fifo", buf->len, ep_idx);
+	LOG_DBG("Wrote %d packets to endpoint%d tx fifo", buf->len, ep_idx);
 
 	return 0;
 }
@@ -836,7 +905,7 @@ static int it82xx2_xfer_out_data(const struct device *dev, uint8_t ep, struct ne
 
 	fifo_idx = ep_idx > 0 ? ep_fifo_res[ep_idx % SHARED_FIFO_NUM] : 0;
 	if (ep_regs[fifo_idx].ep_status & EP_STATUS_ERROR) {
-		LOG_WRN("endpoint%d error status 0x%02x", ep_idx, ep_regs[fifo_idx].ep_status);
+		LOG_ERR("endpoint%d error status 0x%02x", ep_idx, ep_regs[fifo_idx].ep_status);
 		return -EINVAL;
 	}
 
@@ -889,6 +958,12 @@ static int work_handler_xfer_continue(const struct device *dev, uint8_t ep, stru
 			atomic_set_bit(&priv->out_fifo_state, IT82xx2_STATE_OUT_SHARED_FIFO_BUSY);
 		}
 		it82xx2_usb_set_ep_ctrl(dev, ep_idx, EP_READY_ENABLE, true);
+
+		if (IT8XXX2_IS_EXTEND_ENDPOINT(ep_idx)) {
+			it82xx2_usb_set_ep_ctrl(dev, fifo_idx, EP_ENABLE, true);
+		}
+		it82xx2_usb_set_ep_ctrl(dev, ep_idx, EP_ENABLE, true);
+
 		if (ep_idx != 0 && irq_enabled) {
 			irq_enable(config->usb_irq);
 		}
@@ -930,15 +1005,17 @@ static bool get_extend_enable_bit(const struct device *dev, const uint8_t ep_idx
 	return enable;
 }
 
-static bool get_extend_ready_bit(const struct device *dev, const uint8_t ep_idx)
+static bool it82xx2_stall_mismatch(const struct device *dev, const uint8_t ep)
 {
 	const struct usb_it82xx2_config *config = dev->config;
 	struct usb_it82xx2_regs *const usb_regs = config->base;
-	struct epn_ext_ctrl_regs *ext_ctrl =
-		usb_regs->fifo_regs[EP_EXT_REGS_DX].ext_0_3.epn_ext_ctrl;
-	int idx = ((ep_idx - 4) % 3) + 1;
+	struct it82xx2_usb_ep_regs *ep_regs = usb_regs->usb_ep_regs;
+	uint8_t fifo_idx =
+		USB_EP_GET_IDX(ep) ? ep_fifo_res[USB_EP_GET_IDX(ep) % SHARED_FIFO_NUM] : 0;
+	bool halted = udc_get_ep_cfg(dev, ep)->stat.halted;
+	bool stall_sent = ep_regs[fifo_idx].ep_status & DC_STALL_SENT;
 
-	return ((ext_ctrl[idx].epn_ext_ctrl2 & BIT((ep_idx - 4) / 3)) != 0);
+	return halted ? !stall_sent : stall_sent;
 }
 
 static bool it82xx2_fake_token(const struct device *dev, const uint8_t ep, const uint8_t token_type)
@@ -971,9 +1048,15 @@ static bool it82xx2_fake_token(const struct device *dev, const uint8_t ep, const
 			ep_cfg = udc_get_ep_cfg(dev, USB_CONTROL_EP_IN);
 			is_fake = udc_buf_peek(ep_cfg) ? false : true;
 		} else {
-			if (get_fifo_ctrl(dev, fifo_idx) != BIT(ep_idx)) {
-				is_fake = true;
+			if (it82xx2_stall_mismatch(dev, ep)) {
+				return true;
 			}
+
+			if (get_fifo_ctrl(dev, fifo_idx) != BIT(ep_idx)) {
+				return true;
+			}
+
+			return it82xx2_ep_ready(dev, ep_idx);
 		}
 		break;
 	case DC_OUTDATA_TRANS:
@@ -989,10 +1072,16 @@ static bool it82xx2_fake_token(const struct device *dev, const uint8_t ep, const
 				is_fake = true;
 			}
 		} else {
+			if (it82xx2_stall_mismatch(dev, ep)) {
+				return true;
+			}
+
 			if (!atomic_test_bit(&priv->out_fifo_state,
 					     IT82xx2_STATE_OUT_SHARED_FIFO_BUSY)) {
-				is_fake = true;
+				return true;
 			}
+
+			return it82xx2_ep_ready(dev, ep_idx);
 		}
 		break;
 	default:
@@ -1259,6 +1348,52 @@ static inline bool it82xx2_check_ep0_stall(const struct device *dev, const uint8
 	return false;
 }
 
+static void it82xx2_usb_process_in_stall(const struct device *dev, const uint8_t ep)
+{
+	struct it82xx2_data *priv = udc_get_private(dev);
+	struct net_buf *buf;
+	struct udc_ep_config *ep_cfg = udc_get_ep_cfg(dev, ep);
+	uint8_t ep_idx = USB_EP_GET_IDX(ep);
+	uint8_t fifo_idx = ep_idx > 0 ? ep_fifo_res[ep_idx % SHARED_FIFO_NUM] : 0;
+
+	k_sem_give(&priv->fifo_sem[fifo_idx - 1]);
+	udc_ep_set_busy(ep_cfg, false);
+	it82xx2_usb_fifo_ctrl(dev, ep, true);
+	buf = udc_buf_peek(ep_cfg);
+	if (!buf) {
+		LOG_WRN("ep %#x: (halted) null buffer", ep);
+		return;
+	}
+
+	it82xx2_xfer_in_data(dev, ep, buf);
+}
+
+static void it82xx2_usb_process_out_stall(const struct device *dev, const uint8_t ep)
+{
+	const struct usb_it82xx2_config *config = dev->config;
+	struct it82xx2_data *priv = udc_get_private(dev);
+	struct usb_it82xx2_regs *const usb_regs = config->base;
+	struct it82xx2_usb_ep_fifo_regs *ff_regs = usb_regs->fifo_regs;
+	struct net_buf *buf;
+	struct udc_ep_config *ep_cfg = udc_get_ep_cfg(dev, ep);
+	uint8_t ep_idx = USB_EP_GET_IDX(ep);
+	uint8_t fifo_idx = ep_idx > 0 ? ep_fifo_res[ep_idx % SHARED_FIFO_NUM] : 0;
+	size_t len;
+
+	len = (uint16_t)ff_regs[fifo_idx].ep_rx_fifo_dcnt_lsb +
+	      (((uint16_t)ff_regs[fifo_idx].ep_rx_fifo_dcnt_msb) << 8);
+	buf = udc_buf_peek(ep_cfg);
+	if (!buf) {
+		LOG_WRN("ep %#x: (halted) null buffer", ep);
+	} else {
+		it82xx2_xfer_out_data(dev, ep, buf, len);
+	}
+
+	atomic_clear_bit(&priv->out_fifo_state, IT82xx2_STATE_OUT_SHARED_FIFO_BUSY);
+	udc_ep_set_busy(ep_cfg, false);
+	work_handler_xfer_next(dev, ep_cfg);
+}
+
 static void it82xx2_usb_xfer_done(const struct device *dev)
 {
 	const struct usb_it82xx2_config *config = dev->config;
@@ -1301,8 +1436,10 @@ static void it82xx2_usb_xfer_done(const struct device *dev)
 			continue;
 		}
 
+		ep = (transtype == DC_IN_TRANS ? USB_EP_DIR_IN : USB_EP_DIR_OUT) | ep_idx;
+
 		if (ep_idx != 0) {
-			if (it82xx2_fake_token(dev, ep_idx, transtype)) {
+			if (it82xx2_fake_token(dev, ep, transtype)) {
 				continue;
 			}
 		}
@@ -1310,16 +1447,23 @@ static void it82xx2_usb_xfer_done(const struct device *dev)
 		switch (transtype) {
 		case DC_SETUP_TRANS:
 			/* SETUP transaction done */
-			it82xx2_event_submit(dev, ep_idx, IT82xx2_EVT_SETUP_TOKEN);
+			it82xx2_event_submit(dev, ep, IT82xx2_EVT_SETUP_TOKEN);
 			break;
 		case DC_IN_TRANS:
 			/* IN transaction done */
-			ep = USB_EP_DIR_IN | ep_idx;
+			if (ep_idx && udc_get_ep_cfg(dev, ep)->stat.halted) {
+				it82xx2_usb_process_in_stall(dev, ep);
+				break;
+			}
 			it82xx2_event_submit(dev, ep, IT82xx2_EVT_IN_TOKEN);
 			break;
 		case DC_OUTDATA_TRANS:
 			/* OUT transaction done */
-			ep = USB_EP_DIR_OUT | ep_idx;
+			if (ep_idx && udc_get_ep_cfg(dev, ep)->stat.halted) {
+				it82xx2_usb_process_out_stall(dev, ep);
+				break;
+			}
+
 			it82xx2_event_submit(dev, ep, IT82xx2_EVT_OUT_TOKEN);
 			break;
 		default:
