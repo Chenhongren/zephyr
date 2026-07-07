@@ -554,4 +554,361 @@ ZTEST(flash_driver, test_flash_copy)
 			      page_info.size - (page_info.size / 4), buf, sizeof(buf), -EINVAL);
 }
 
+#include <zephyr/drivers/flash/it51xxx_flash_api_ex.h>
+
+ZTEST(flash_driver, test_it51xxx_write_protection)
+{
+	struct flash_it51xxx_ex_op_addr_protection request;
+	struct flash_it51xxx_ex_op_addr_protection status;
+	const struct flash_parameters *fparams = flash_get_parameters(flash_dev);
+	uint8_t buf[EXPECTED_SIZE];
+	int rc;
+
+	TC_PRINT("start_offset=0x%lx\tsize=%d\n", page_info.start_offset, EXPECTED_SIZE);
+
+	TC_PRINT("Erasing...\n");
+	/* Erase a nb of pages aligned to the EXPECTED_SIZE */
+	rc = flash_erase(
+		flash_dev, page_info.start_offset,
+		(page_info.size * ((EXPECTED_SIZE + page_info.size - 1) / page_info.size)));
+	zassert_equal(rc, 0, "Flash memory not properly erased");
+
+	TC_PRINT("Reading...\n");
+	rc = flash_read(flash_dev, page_info.start_offset, buf, EXPECTED_SIZE);
+	zassert_equal(rc, 0, "Cannot read flash");
+
+	if (memcmp(buf, expected, EXPECTED_SIZE) != 0) {
+		TC_PRINT("Erasing succeeded\n");
+	}
+
+	TC_PRINT("[EC] Enabling write protection...\n");
+	request.path = PROTECT_PATH_EC;
+	request.is_protected = true;
+	request.addr = page_info.start_offset;
+	request.size = KB(8);
+	status.path = PROTECT_PATH_EC;
+	status.addr = page_info.start_offset;
+	status.size = KB(8);
+
+	rc = flash_ex_op(flash_dev, FLASH_IT51XXX_WRITE_PROTECT, (uintptr_t)&request, &status);
+	zassert_equal(rc, 0, "Cannot enable write protection");
+	zassert_equal(status.is_protected, true, "Write protection status is false");
+
+	rc = flash_write(flash_dev, page_info.start_offset, expected, EXPECTED_SIZE);
+	zassert_equal(rc, 0, "Cannot write flash");
+
+	rc = flash_read(flash_dev, TEST_AREA_OFFSET, buf, EXPECTED_SIZE);
+	zassert_equal(rc, 0, "Cannot read flash");
+
+	for (off_t i = 0; i < EXPECTED_SIZE; i++) {
+		zassert_true(buf[i] == fparams->erase_value,
+			     "Buffer is not empty after write with protected "
+			     "sectors");
+	}
+
+	TC_PRINT("[EC] Disabling write protection...\n");
+	request.is_protected = false;
+
+	rc = flash_ex_op(flash_dev, FLASH_IT51XXX_WRITE_PROTECT, (uintptr_t)&request, &status);
+	zassert_equal(rc, 0, "Cannot disable write protection");
+	zassert_equal(status.is_protected, false, "Write protection status is true");
+
+	rc = flash_write(flash_dev, page_info.start_offset, expected, EXPECTED_SIZE);
+	zassert_equal(rc, 0, "Write failed");
+	TC_PRINT("Write succeeded\n");
+
+	rc = flash_read(flash_dev, page_info.start_offset, buf, EXPECTED_SIZE);
+	zassert_equal(rc, 0, "Cannot read flash");
+
+	zassert_equal(memcmp(buf, expected, EXPECTED_SIZE), 0,
+		      "Read data doesn't match expected data");
+
+	TC_PRINT("[EC] Enabling read protection...\n");
+	request.path = PROTECT_PATH_EC;
+	request.is_protected = true;
+	request.addr = page_info.start_offset;
+	request.size = KB(8);
+	status.path = PROTECT_PATH_EC;
+	status.addr = page_info.start_offset;
+	status.size = KB(8);
+
+	rc = flash_ex_op(flash_dev, FLASH_IT51XXX_READ_PROTECT, (uintptr_t)&request, &status);
+	zassert_equal(rc, 0, "Cannot enable read protection");
+	zassert_equal(status.is_protected, true, "Read protection status is false");
+
+	rc = flash_read(flash_dev, page_info.start_offset, buf, EXPECTED_SIZE);
+	zassert_equal(rc, 0, "Cannot read flash");
+
+	zassert_not_equal(memcmp(buf, expected, EXPECTED_SIZE), 0,
+			  "Read data matched the expected data after enabling read protection");
+
+	TC_PRINT("[EC] Disabling read protection...\n");
+	request.is_protected = false;
+
+	rc = flash_ex_op(flash_dev, FLASH_IT51XXX_READ_PROTECT, (uintptr_t)&request, &status);
+	zassert_equal(rc, 0, "Cannot disable read protection");
+	zassert_equal(status.is_protected, false, "Read protection status is true");
+
+	rc = flash_read(flash_dev, page_info.start_offset, buf, EXPECTED_SIZE);
+	zassert_equal(rc, 0, "Cannot read flash");
+
+	zassert_equal(memcmp(buf, expected, EXPECTED_SIZE), 0,
+		      "Read data doesn't match expected data");
+
+	TC_PRINT("[HOST] Enabling read protection...\n");
+	request.path = PROTECT_PATH_HOST;
+	request.is_protected = true;
+	status.path = PROTECT_PATH_HOST;
+
+	rc = flash_ex_op(flash_dev, FLASH_IT51XXX_READ_PROTECT, (uintptr_t)&request, &status);
+	zassert_equal(rc, 0, "Cannot enable read protection");
+	zassert_equal(status.is_protected, true, "Read protection status is false");
+
+	TC_PRINT("[HOST] Disabling read protection...\n");
+	request.is_protected = false;
+	rc = flash_ex_op(flash_dev, FLASH_IT51XXX_READ_PROTECT, (uintptr_t)&request, &status);
+	zassert_equal(rc, 0, "Cannot disable read protection");
+	zassert_equal(status.is_protected, false, "Read protection status is true");
+
+	TC_PRINT("[HOST] Enabling write protection...\n");
+	request.path = PROTECT_PATH_HOST;
+	request.is_protected = true;
+	status.path = PROTECT_PATH_HOST;
+
+	rc = flash_ex_op(flash_dev, FLASH_IT51XXX_WRITE_PROTECT, (uintptr_t)&request, &status);
+	zassert_equal(rc, 0, "Cannot enable write protection");
+	zassert_equal(status.is_protected, true, "Write protection status is false");
+
+	TC_PRINT("[HOST] Disabling write protection...\n");
+	request.is_protected = false;
+	rc = flash_ex_op(flash_dev, FLASH_IT51XXX_WRITE_PROTECT, (uintptr_t)&request, &status);
+	zassert_equal(rc, 0, "Cannot disable write protection");
+	zassert_equal(status.is_protected, false, "Write protection status is true");
+
+	TC_PRINT("[DBGR] Enabling read protection...\n");
+	request.path = PROTECT_PATH_DBGR;
+	request.is_protected = true;
+	status.path = PROTECT_PATH_DBGR;
+
+	rc = flash_ex_op(flash_dev, FLASH_IT51XXX_READ_PROTECT, (uintptr_t)&request, &status);
+	zassert_equal(rc, 0, "Cannot enable read protection");
+	zassert_equal(status.is_protected, true, "Read protection status is false");
+
+	TC_PRINT("[DBGR] Disabling read protection...\n");
+	request.is_protected = false;
+	rc = flash_ex_op(flash_dev, FLASH_IT51XXX_READ_PROTECT, (uintptr_t)&request, &status);
+	zassert_equal(rc, 0, "Cannot disable read protection");
+	zassert_equal(status.is_protected, false, "Read protection status is true");
+
+	TC_PRINT("[DBGR] Enabling write protection...\n");
+	request.path = PROTECT_PATH_DBGR;
+	request.is_protected = true;
+	status.path = PROTECT_PATH_DBGR;
+
+	rc = flash_ex_op(flash_dev, FLASH_IT51XXX_WRITE_PROTECT, (uintptr_t)&request, &status);
+	zassert_equal(rc, 0, "Cannot enable write protection");
+	zassert_equal(status.is_protected, true, "Write protection status is false");
+
+	TC_PRINT("[DBGR] Disabling write protection...\n");
+	request.is_protected = false;
+	rc = flash_ex_op(flash_dev, FLASH_IT51XXX_WRITE_PROTECT, (uintptr_t)&request, &status);
+	zassert_equal(rc, 0, "Cannot disable write protection");
+	zassert_equal(status.is_protected, false, "Write protection status is true");
+
+	TC_PRINT("[ALL] Enabling read protection...\n");
+	request.path = PROTECT_PATH_ALL;
+	request.is_protected = true;
+	status.path = PROTECT_PATH_ALL;
+
+	rc = flash_ex_op(flash_dev, FLASH_IT51XXX_READ_PROTECT, (uintptr_t)&request, &status);
+	zassert_equal(rc, 0, "Cannot enable read protection");
+	zassert_equal(status.is_protected, true, "Read protection status is false");
+
+	TC_PRINT("[ALL] Disabling read protection...\n");
+	request.is_protected = false;
+	rc = flash_ex_op(flash_dev, FLASH_IT51XXX_READ_PROTECT, (uintptr_t)&request, &status);
+	zassert_equal(rc, 0, "Cannot disable read protection");
+	zassert_equal(status.is_protected, false, "Read protection status is true");
+
+	TC_PRINT("[ALL] Enabling write protection...\n");
+	request.path = PROTECT_PATH_ALL;
+	request.is_protected = true;
+	status.path = PROTECT_PATH_ALL;
+
+	rc = flash_ex_op(flash_dev, FLASH_IT51XXX_WRITE_PROTECT, (uintptr_t)&request, &status);
+	zassert_equal(rc, 0, "Cannot enable write protection");
+	zassert_equal(status.is_protected, true, "Write protection status is false");
+
+	TC_PRINT("[ALL] Disabling write protection...\n");
+	request.is_protected = false;
+	rc = flash_ex_op(flash_dev, FLASH_IT51XXX_WRITE_PROTECT, (uintptr_t)&request, &status);
+	zassert_equal(rc, 0, "Cannot disable write protection");
+	zassert_equal(status.is_protected, false, "Write protection status is true");
+
+	struct flash_it51xxx_ex_op_wr_protect_lock request_lock;
+	struct flash_it51xxx_ex_op_wr_protect_lock status_lock;
+
+	TC_PRINT("[EC] Enabling wr protection lock...\n");
+	request_lock.is_locked = true;
+	request_lock.path = PROTECT_PATH_EC;
+	status_lock.path = PROTECT_PATH_EC;
+	rc = flash_ex_op(flash_dev, FLASH_IT51XXX_WR_PROTECT_LOCK, (uintptr_t)&request_lock,
+			 &status_lock);
+	zassert_equal(rc, 0, "Cannot enable wr protection lock");
+	zassert_equal(status_lock.is_locked, true, "WR protection lock status is false");
+
+	/* try to enable ec path read protection */
+	request.path = PROTECT_PATH_EC;
+	request.is_protected = true;
+	status.path = PROTECT_PATH_EC;
+	rc = flash_ex_op(flash_dev, FLASH_IT51XXX_READ_PROTECT, (uintptr_t)&request, &status);
+	zassert_equal(rc, 0, "Cannot enable read protection");
+	zassert_equal(status.is_protected, false, "Read protection status is true");
+	TC_PRINT("---- protection status: %s\n",
+		 status.is_protected ? "protected" : "non-protected");
+
+	TC_PRINT("[EC] Disabling wr protection lock...\n");
+	request_lock.is_locked = false;
+	request_lock.path = PROTECT_PATH_EC;
+	status_lock.path = PROTECT_PATH_EC;
+	rc = flash_ex_op(flash_dev, FLASH_IT51XXX_WR_PROTECT_LOCK, (uintptr_t)&request_lock,
+			 &status_lock);
+	zassert_equal(rc, 0, "Cannot enable wr protection lock");
+	zassert_equal(status_lock.is_locked, false, "WR protection lock status is true");
+
+	/* try to enable ec path read protection */
+	request.path = PROTECT_PATH_EC;
+	request.is_protected = true;
+	status.path = PROTECT_PATH_EC;
+	rc = flash_ex_op(flash_dev, FLASH_IT51XXX_READ_PROTECT, (uintptr_t)&request, &status);
+	zassert_equal(rc, 0, "Cannot enable read protection");
+	zassert_equal(status.is_protected, true, "Read protection status is false");
+	TC_PRINT("---- protection status: %s\n",
+		 status.is_protected ? "protected" : "non-protected");
+
+	/* try to disable ec path read protection */
+	request.path = PROTECT_PATH_EC;
+	request.is_protected = false;
+	status.path = PROTECT_PATH_EC;
+	rc = flash_ex_op(flash_dev, FLASH_IT51XXX_READ_PROTECT, (uintptr_t)&request, &status);
+	zassert_equal(rc, 0, "Cannot enable read protection");
+	zassert_equal(status.is_protected, false, "Read protection status is true");
+	TC_PRINT("---- protection status: %s\n",
+		 status.is_protected ? "protected" : "non-protected");
+
+	TC_PRINT("[HOST] Enabling wr protection lock...\n");
+	request_lock.is_locked = true;
+	request_lock.path = PROTECT_PATH_HOST;
+	status_lock.path = PROTECT_PATH_HOST;
+	rc = flash_ex_op(flash_dev, FLASH_IT51XXX_WR_PROTECT_LOCK, (uintptr_t)&request_lock,
+			 &status_lock);
+	zassert_equal(rc, 0, "Cannot enable wr protection lock");
+	zassert_equal(status_lock.is_locked, true, "WR protection lock status is false");
+
+	/* try to enable host path read protection */
+	request.path = PROTECT_PATH_HOST;
+	request.is_protected = true;
+	status.path = PROTECT_PATH_HOST;
+	rc = flash_ex_op(flash_dev, FLASH_IT51XXX_READ_PROTECT, (uintptr_t)&request, &status);
+	zassert_equal(rc, 0, "Cannot enable read protection");
+	zassert_equal(status.is_protected, false, "Read protection status is true");
+	TC_PRINT("---- protection status: %s\n",
+		 status.is_protected ? "protected" : "non-protected");
+
+	TC_PRINT("[HOST] Disabling wr protection lock...\n");
+	request_lock.is_locked = false;
+	request_lock.path = PROTECT_PATH_HOST;
+	status_lock.path = PROTECT_PATH_HOST;
+	rc = flash_ex_op(flash_dev, FLASH_IT51XXX_WR_PROTECT_LOCK, (uintptr_t)&request_lock,
+			 &status_lock);
+	zassert_equal(rc, 0, "Cannot enable wr protection lock");
+	zassert_equal(status_lock.is_locked, false, "WR protection lock status is true");
+
+	/* try to enable host path read protection */
+	request.path = PROTECT_PATH_HOST;
+	request.is_protected = true;
+	status.path = PROTECT_PATH_HOST;
+	rc = flash_ex_op(flash_dev, FLASH_IT51XXX_READ_PROTECT, (uintptr_t)&request, &status);
+	zassert_equal(rc, 0, "Cannot enable read protection");
+	zassert_equal(status.is_protected, true, "Read protection status is false");
+	TC_PRINT("---- protection status: %s\n",
+		 status.is_protected ? "protected" : "non-protected");
+
+	/* try to disable host path read protection */
+	request.path = PROTECT_PATH_HOST;
+	request.is_protected = false;
+	status.path = PROTECT_PATH_HOST;
+	rc = flash_ex_op(flash_dev, FLASH_IT51XXX_READ_PROTECT, (uintptr_t)&request, &status);
+	zassert_equal(rc, 0, "Cannot enable read protection");
+	zassert_equal(status.is_protected, false, "Read protection status is true");
+	TC_PRINT("---- protection status: %s\n",
+		 status.is_protected ? "protected" : "non-protected");
+
+	TC_PRINT("[DBGR] Enabling wr protection lock...\n");
+	request_lock.is_locked = true;
+	request_lock.path = PROTECT_PATH_DBGR;
+	status_lock.path = PROTECT_PATH_DBGR;
+	rc = flash_ex_op(flash_dev, FLASH_IT51XXX_WR_PROTECT_LOCK, (uintptr_t)&request_lock,
+			 &status_lock);
+	zassert_equal(rc, 0, "Cannot enable wr protection lock");
+	zassert_equal(status_lock.is_locked, true, "WR protection lock status is false");
+
+	/* try to enable dbgr path read protection */
+	request.path = PROTECT_PATH_DBGR;
+	request.is_protected = true;
+	status.path = PROTECT_PATH_DBGR;
+	rc = flash_ex_op(flash_dev, FLASH_IT51XXX_READ_PROTECT, (uintptr_t)&request, &status);
+	zassert_equal(rc, 0, "Cannot enable read protection");
+	zassert_equal(status.is_protected, false, "Read protection status is true");
+	TC_PRINT("---- protection status: %s\n",
+		 status.is_protected ? "protected" : "non-protected");
+
+	TC_PRINT("[DBGR] Disabling wr protection lock...\n");
+	request_lock.is_locked = false;
+	request_lock.path = PROTECT_PATH_DBGR;
+	status_lock.path = PROTECT_PATH_DBGR;
+	rc = flash_ex_op(flash_dev, FLASH_IT51XXX_WR_PROTECT_LOCK, (uintptr_t)&request_lock,
+			 &status_lock);
+	zassert_equal(rc, 0, "Cannot enable wr protection lock");
+	zassert_equal(status_lock.is_locked, false, "WR protection lock status is true");
+
+	/* try to enable dbgr path read protection */
+	request.path = PROTECT_PATH_DBGR;
+	request.is_protected = true;
+	status.path = PROTECT_PATH_DBGR;
+	rc = flash_ex_op(flash_dev, FLASH_IT51XXX_READ_PROTECT, (uintptr_t)&request, &status);
+	zassert_equal(rc, 0, "Cannot enable read protection");
+	zassert_equal(status.is_protected, true, "Read protection status is false");
+	TC_PRINT("---- protection status: %s\n",
+		 status.is_protected ? "protected" : "non-protected");
+
+	/* try to disable dbgr path read protection */
+	request.path = PROTECT_PATH_DBGR;
+	request.is_protected = false;
+	status.path = PROTECT_PATH_DBGR;
+	rc = flash_ex_op(flash_dev, FLASH_IT51XXX_READ_PROTECT, (uintptr_t)&request, &status);
+	zassert_equal(rc, 0, "Cannot enable read protection");
+	zassert_equal(status.is_protected, false, "Read protection status is true");
+	TC_PRINT("---- protection status: %s\n",
+		 status.is_protected ? "protected" : "non-protected");
+
+	TC_PRINT("[ALL] Enabling wr protection lock...\n");
+	request_lock.is_locked = true;
+	request_lock.path = PROTECT_PATH_ALL;
+	status_lock.path = PROTECT_PATH_ALL;
+	rc = flash_ex_op(flash_dev, FLASH_IT51XXX_WR_PROTECT_LOCK, (uintptr_t)&request_lock,
+			 &status_lock);
+	zassert_equal(rc, 0, "Cannot enable wr protection lock");
+	zassert_equal(status_lock.is_locked, true, "WR protection lock status is false");
+
+	TC_PRINT("[ALL] Disabling wr protection lock...\n");
+	request_lock.is_locked = false;
+	request_lock.path = PROTECT_PATH_ALL;
+	status_lock.path = PROTECT_PATH_ALL;
+	rc = flash_ex_op(flash_dev, FLASH_IT51XXX_WR_PROTECT_LOCK, (uintptr_t)&request_lock,
+			 &status_lock);
+	zassert_equal(rc, 0, "Cannot enable wr protection lock");
+	zassert_equal(status_lock.is_locked, false, "WR protection lock status is true");
+}
+
 ZTEST_SUITE(flash_driver, NULL, NULL, flash_driver_before, NULL, NULL);
