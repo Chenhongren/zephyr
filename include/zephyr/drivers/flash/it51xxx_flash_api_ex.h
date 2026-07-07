@@ -26,6 +26,12 @@ extern "C" {
 
 #include <zephyr/drivers/flash.h>
 
+#define IT51XXX_PROTECT_PATH_COUNT 3
+#define PROTECT_PATH_EC            BIT(0)
+#define PROTECT_PATH_HOST          BIT(1)
+#define PROTECT_PATH_DBGR          BIT(2)
+#define PROTECT_PATH_ALL           (PROTECT_PATH_EC | PROTECT_PATH_HOST | PROTECT_PATH_DBGR)
+
 /**
  * @enum flash_it51xxx_ex_op
  * @brief Enumeration for IT51XXX flash extended operations.
@@ -69,6 +75,21 @@ enum flash_it51xxx_ex_op {
 	 * requiring 32-bit address cycles.
 	 */
 	FLASH_IT51XXX_ADDR_4B,
+	/**
+	 * Write protection.
+	 */
+	FLASH_IT51XXX_WRITE_PROTECT,
+	/**
+	 * Read protection.
+	 */
+	FLASH_IT51XXX_READ_PROTECT,
+};
+
+struct flash_it51xxx_ex_op_addr_protection {
+	uint32_t addr;
+	size_t size;
+	uint8_t path;
+	bool is_protected;
 };
 
 /**
