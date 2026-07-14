@@ -17,6 +17,12 @@
 		endpoint-ids = <11>;
 	};
 
+	mctp_i3c_1: mctp_i3c_1 {
+		compatible = "zephyr,mctp-i3c-controller";
+		endpoints = <&mctp_endpoint1>;
+		endpoint-ids = <20>;
+	};
+
 	aliases {
 		i3c-controller = &i3c0;
 	};
@@ -51,6 +57,13 @@
 		zephyr,deferred-init;
 		compatible = "zephyr,mctp-i3c-endpoint";
 		reg = <0x00 0x05fa 0x00000011>;
+		status = "okay";
+	};
+
+	/* dynamic address assignment: entdaa */
+	mctp_endpoint1: mctp_endpoint1@5fa00000020 {
+		compatible = "zephyr,mctp-i3c-endpoint";
+		reg = <0x00 0x05fa 0x00000020>;
 		status = "okay";
 	};
 };

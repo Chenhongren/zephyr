@@ -8,7 +8,7 @@
 	mctp_i3c: mctp_i3c {
 		compatible = "zephyr,mctp-i3c-target";
 		i3c = <&i3c2>;
-		endpoint-id = <11>;
+		endpoint-id = <20>;
 	};
 };
 
@@ -19,5 +19,5 @@
 	pinctrl-names = "default";
 
 	bcr = <0x06>;
-	pid-random-value = <0x00000011>;
+	pid-random-value = <0x00000020>;
 };
