@@ -353,17 +353,25 @@ static int it82xx2_usb_ep_ctrl(const struct device *dev, uint8_t ep, enum it82xx
 static int it82xx2_usb_set_ep_ctrl(const struct device *dev, uint8_t ep, enum it82xx2_ep_ctrl ctrl,
 				   bool enable)
 {
+	const struct usb_it82xx2_config *config = dev->config;
+	const bool irq_enabled = irq_is_enabled(config->usb_irq);
 	const uint8_t ep_idx = USB_EP_GET_IDX(ep);
 	int ret = 0;
-	unsigned int key;
 
-	key = irq_lock();
+	if (irq_enabled) {
+		irq_disable(config->usb_irq);
+	}
+
 	if (IT8XXX2_IS_EXTEND_ENDPOINT(ep_idx)) {
 		ret = it82xx2_usb_extend_ep_ctrl(dev, ep, ctrl, enable);
 	} else {
 		ret = it82xx2_usb_ep_ctrl(dev, ep, ctrl, enable);
 	}
-	irq_unlock(key);
+
+	if (irq_enabled) {
+		irq_enable(config->usb_irq);
+	}
+
 	return ret;
 }
 
@@ -420,10 +428,10 @@ static int it82xx2_usb_fifo_ctrl(const struct device *dev, const uint8_t ep, con
 {
 	const uint8_t ep_idx = USB_EP_GET_IDX(ep);
 	const struct usb_it82xx2_config *config = dev->config;
+	const bool irq_enabled = irq_is_enabled(config->usb_irq);
 	struct usb_it82xx2_regs *const usb_regs = config->base;
 	volatile uint8_t *ep_fifo_ctrl = usb_regs->fifo_regs[EP_EXT_REGS_BX].fifo_ctrl.ep_fifo_ctrl;
 	uint8_t fifon_ctrl = (ep_fifo_res[ep_idx % SHARED_FIFO_NUM] - 1) * 2;
-	unsigned int key;
 	int ret = 0;
 
 	if (ep_idx == 0) {
@@ -431,11 +439,16 @@ static int it82xx2_usb_fifo_ctrl(const struct device *dev, const uint8_t ep, con
 		return -EINVAL;
 	}
 
-	key = irq_lock();
+	if (irq_enabled) {
+		irq_disable(config->usb_irq);
+	}
+
 	if (reset) {
 		ep_fifo_ctrl[fifon_ctrl] = 0x0;
 		ep_fifo_ctrl[fifon_ctrl + 1] = 0x0;
-		irq_unlock(key);
+		if (irq_enabled) {
+			irq_enable(config->usb_irq);
+		}
 		return 0;
 	}
 
@@ -457,7 +470,10 @@ static int it82xx2_usb_fifo_ctrl(const struct device *dev, const uint8_t ep, con
 		LOG_ERR("Failed to set fifo control register for ep 0x%x", ep);
 		ret = -EINVAL;
 	}
-	irq_unlock(key);
+
+	if (irq_enabled) {
+		irq_enable(config->usb_irq);
+	}
 
 	return ret;
 }
@@ -504,19 +520,26 @@ static int it82xx2_ep_dequeue(const struct device *dev, struct udc_ep_config *co
 {
 	const uint8_t ep_idx = USB_EP_GET_IDX(cfg->addr);
 	const struct usb_it82xx2_config *config = dev->config;
+	const bool irq_enabled = irq_is_enabled(config->usb_irq);
 	struct usb_it82xx2_regs *const usb_regs = config->base;
 	struct it82xx2_usb_ep_fifo_regs *ff_regs = usb_regs->fifo_regs;
-	unsigned int lock_key;
 	uint8_t fifo_idx;
 
 	fifo_idx = ep_idx > 0 ? ep_fifo_res[ep_idx % SHARED_FIFO_NUM] : 0;
-	lock_key = irq_lock();
+
+	if (irq_enabled) {
+		irq_disable(config->usb_irq);
+	}
+
 	if (USB_EP_DIR_IS_IN(cfg->addr)) {
 		ff_regs[fifo_idx].ep_tx_fifo_ctrl = FIFO_FORCE_EMPTY;
 	} else {
 		ff_regs[fifo_idx].ep_rx_fifo_ctrl = FIFO_FORCE_EMPTY;
 	}
-	irq_unlock(lock_key);
+
+	if (irq_enabled) {
+		irq_enable(config->usb_irq);
+	}
 
 	udc_ep_cancel_queued(dev, cfg);
 
@@ -762,11 +785,11 @@ static int it82xx2_xfer_in_data(const struct device *dev, uint8_t ep, struct net
 {
 	const uint8_t ep_idx = USB_EP_GET_IDX(ep);
 	const struct usb_it82xx2_config *config = dev->config;
+	const bool irq_enabled = irq_is_enabled(config->usb_irq);
 	struct usb_it82xx2_regs *const usb_regs = config->base;
 	struct it82xx2_usb_ep_fifo_regs *ff_regs = usb_regs->fifo_regs;
 	struct it82xx2_data *priv = udc_get_private(dev);
 	struct udc_ep_config *ep_cfg = udc_get_ep_cfg(dev, ep);
-	unsigned int key;
 	uint8_t fifo_idx;
 	size_t len;
 
@@ -778,7 +801,9 @@ static int it82xx2_xfer_in_data(const struct device *dev, uint8_t ep, struct net
 		}
 	} else {
 		k_sem_take(&priv->fifo_sem[fifo_idx - 1], K_FOREVER);
-		key = irq_lock();
+		if (irq_enabled) {
+			irq_disable(config->usb_irq);
+		}
 		it82xx2_usb_fifo_ctrl(dev, ep, false);
 	}
 
@@ -789,8 +814,8 @@ static int it82xx2_xfer_in_data(const struct device *dev, uint8_t ep, struct net
 	}
 
 	it82xx2_usb_set_ep_ctrl(dev, ep_idx, EP_READY_ENABLE, true);
-	if (ep_idx != 0) {
-		irq_unlock(key);
+	if (ep_idx != 0 && irq_enabled) {
+		irq_enable(config->usb_irq);
 	}
 
 	LOG_DBG("Writed %d packets to endpoint%d tx fifo", buf->len, ep_idx);
@@ -846,23 +871,25 @@ static uint16_t get_fifo_ctrl(const struct device *dev, const uint8_t fifo_idx)
 
 static int work_handler_xfer_continue(const struct device *dev, uint8_t ep, struct net_buf *buf)
 {
+	const struct usb_it82xx2_config *config = dev->config;
+	const bool irq_enabled = irq_is_enabled(config->usb_irq);
 	const uint8_t ep_idx = USB_EP_GET_IDX(ep);
 	int ret = 0;
 	uint8_t fifo_idx;
 
 	fifo_idx = ep_idx > 0 ? ep_fifo_res[ep_idx % SHARED_FIFO_NUM] : 0;
 	if (USB_EP_DIR_IS_OUT(ep)) {
-		unsigned int key;
-
 		if (ep_idx != 0) {
 			struct it82xx2_data *priv = udc_get_private(dev);
 
-			key = irq_lock();
+			if (irq_enabled) {
+				irq_disable(config->usb_irq);
+			}
 			atomic_set_bit(&priv->out_fifo_state, IT82xx2_STATE_OUT_SHARED_FIFO_BUSY);
 		}
 		it82xx2_usb_set_ep_ctrl(dev, ep_idx, EP_READY_ENABLE, true);
-		if (ep_idx != 0) {
-			irq_unlock(key);
+		if (ep_idx != 0 && irq_enabled) {
+			irq_enable(config->usb_irq);
 		}
 	} else {
 		ret = it82xx2_xfer_in_data(dev, ep, buf);
@@ -1363,8 +1390,8 @@ static void suspended_handler(struct k_work *item)
 	struct it82xx2_data *priv = CONTAINER_OF(dwork, struct it82xx2_data, suspended_work);
 	const struct device *dev = priv->dev;
 	const struct usb_it82xx2_config *config = dev->config;
+	const bool irq_enabled = irq_is_enabled(config->usb_irq);
 	struct usb_it82xx2_regs *const usb_regs = config->base;
-	unsigned int key;
 
 	if (usb_regs->dc_interrupt_status & DC_SOF_RECEIVED) {
 		usb_regs->dc_interrupt_status = DC_SOF_RECEIVED;
@@ -1372,7 +1399,10 @@ static void suspended_handler(struct k_work *item)
 		return;
 	}
 
-	key = irq_lock();
+	if (irq_enabled) {
+		irq_disable(config->usb_irq);
+	}
+
 	if (!udc_is_suspended(dev) && udc_is_enabled(dev)) {
 		udc_set_suspended(dev, true);
 		udc_submit_event(dev, UDC_EVT_SUSPEND, 0);
@@ -1388,7 +1418,9 @@ static void suspended_handler(struct k_work *item)
 		it82xx2_enable_sof_int(dev, true);
 	}
 
-	irq_unlock(key);
+	if (irq_enabled) {
+		irq_enable(config->usb_irq);
+	}
 }
 
 static int it82xx2_enable(const struct device *dev)
