@@ -100,9 +100,6 @@ struct it82xx2_ep_event {
 	enum it82xx2_event_type event;
 };
 
-K_MSGQ_DEFINE(evt_msgq, sizeof(struct it82xx2_ep_event), CONFIG_UDC_IT82XX2_EVENT_COUNT,
-	      sizeof(uint32_t));
-
 struct usb_it8xxx2_wuc {
 	/* WUC control device structure */
 	const struct device *dev;
@@ -118,6 +115,8 @@ struct it82xx2_data {
 
 	struct k_thread thread_data;
 	struct k_sem suspended_sem;
+
+	struct k_msgq *evt_msgq;
 
 	/* shared OUT FIFO state */
 	atomic_t out_fifo_state;
@@ -482,11 +481,12 @@ static int it82xx2_usb_fifo_ctrl(const struct device *dev, const uint8_t ep, con
 static void it82xx2_event_submit(const struct device *dev, const uint8_t ep,
 				 const enum it82xx2_event_type event)
 {
+	struct it82xx2_data *priv = udc_get_private(dev);
 	struct it82xx2_ep_event evt;
 
 	evt.ep = ep;
 	evt.event = event;
-	k_msgq_put(&evt_msgq, &evt, K_NO_WAIT);
+	k_msgq_put(priv->evt_msgq, &evt, K_NO_WAIT);
 }
 
 static int it82xx2_ep_enqueue(const struct device *dev, struct udc_ep_config *const cfg,
@@ -1185,13 +1185,14 @@ static void xfer_work_handler(void *arg1, void *arg2, void *arg3)
 	ARG_UNUSED(arg3);
 
 	const struct device *dev = arg1;
+	struct it82xx2_data *priv = udc_get_private(dev);
 
 	while (true) {
 		struct udc_ep_config *ep_cfg;
 		struct it82xx2_ep_event evt;
 		int err = 0;
 
-		k_msgq_get(&evt_msgq, &evt, K_FOREVER);
+		k_msgq_get(priv->evt_msgq, &evt, K_FOREVER);
 
 		ep_cfg = udc_get_ep_cfg(dev, evt.ep);
 
@@ -1638,7 +1639,12 @@ static int it82xx2_usb_driver_preinit(const struct device *dev)
 		.thread_stk_sz = K_THREAD_STACK_SIZEOF(udc_it82xx2_stack_##n),                     \
 	};                                                                                         \
                                                                                                    \
-	static struct it82xx2_data priv_data_##n = {};                                             \
+	K_MSGQ_DEFINE(evt_msgq_##n, sizeof(struct it82xx2_ep_event),                               \
+		      CONFIG_UDC_IT82XX2_EVENT_COUNT, sizeof(uint32_t));                           \
+                                                                                                   \
+	static struct it82xx2_data priv_data_##n = {                                               \
+		.evt_msgq = &evt_msgq_##n,                                                         \
+	};                                                                                         \
                                                                                                    \
 	static struct udc_data udc_data_##n = {                                                    \
 		.mutex = Z_MUTEX_INITIALIZER(udc_data_##n.mutex),                                  \
