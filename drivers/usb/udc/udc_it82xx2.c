@@ -100,8 +100,8 @@ struct it82xx2_ep_event {
 	enum it82xx2_event_type event;
 };
 
-K_MSGQ_DEFINE(evt_msgq, sizeof(struct it82xx2_ep_event),
-	      CONFIG_UDC_IT82xx2_EVENT_COUNT, sizeof(uint32_t));
+K_MSGQ_DEFINE(evt_msgq, sizeof(struct it82xx2_ep_event), CONFIG_UDC_IT82XX2_EVENT_COUNT,
+	      sizeof(uint32_t));
 
 struct usb_it8xxx2_wuc {
 	/* WUC control device structure */
@@ -137,7 +137,8 @@ struct usb_it82xx2_config {
 	uint8_t wu_irq;
 	struct udc_ep_config *ep_cfg_in;
 	struct udc_ep_config *ep_cfg_out;
-	void (*make_thread)(const struct device *dev);
+	k_thread_stack_t *thread_stk;
+	size_t thread_stk_sz;
 };
 
 enum it82xx2_ep_ctrl {
@@ -1178,8 +1179,13 @@ static inline int work_handler_out(const struct device *dev, uint8_t ep)
 	return err;
 }
 
-static void xfer_work_handler(const struct device *dev)
+static void xfer_work_handler(void *arg1, void *arg2, void *arg3)
 {
+	ARG_UNUSED(arg2);
+	ARG_UNUSED(arg3);
+
+	const struct device *dev = arg1;
+
 	while (true) {
 		struct udc_ep_config *ep_cfg;
 		struct it82xx2_ep_event evt;
@@ -1596,7 +1602,10 @@ static int it82xx2_usb_driver_preinit(const struct device *dev)
 
 	priv->dev = dev;
 
-	config->make_thread(dev);
+	k_thread_create(&priv->thread_data, config->thread_stk, config->thread_stk_sz,
+			xfer_work_handler, (void *)dev, NULL, NULL,
+			K_PRIO_COOP(CONFIG_UDC_IT82XX2_THREAD_PRIORITY), 0, K_NO_WAIT);
+	k_thread_name_set(&priv->thread_data, dev->name);
 
 	/* Initializing WU (USB D+) */
 	it8xxx2_usb_dc_wuc_init(dev);
@@ -1610,25 +1619,7 @@ static int it82xx2_usb_driver_preinit(const struct device *dev)
 }
 
 #define IT82xx2_USB_DEVICE_DEFINE(n)                                                               \
-	K_KERNEL_STACK_DEFINE(udc_it82xx2_stack_##n, CONFIG_UDC_IT82xx2_STACK_SIZE);               \
-                                                                                                   \
-	static void udc_it82xx2_thread_##n(void *dev, void *arg1, void *arg2)                      \
-	{                                                                                          \
-		ARG_UNUSED(arg1);                                                                  \
-		ARG_UNUSED(arg2);                                                                  \
-		xfer_work_handler(dev);                                                            \
-	}                                                                                          \
-                                                                                                   \
-	static void udc_it82xx2_make_thread_##n(const struct device *dev)                          \
-	{                                                                                          \
-		struct it82xx2_data *priv = udc_get_private(dev);                                  \
-                                                                                                   \
-		k_thread_create(&priv->thread_data, udc_it82xx2_stack_##n,                         \
-				K_THREAD_STACK_SIZEOF(udc_it82xx2_stack_##n),                      \
-				udc_it82xx2_thread_##n, (void *)dev, NULL, NULL, K_PRIO_COOP(8),   \
-				0, K_NO_WAIT);                                                     \
-		k_thread_name_set(&priv->thread_data, dev->name);                                  \
-	}                                                                                          \
+	K_KERNEL_STACK_DEFINE(udc_it82xx2_stack_##n, CONFIG_UDC_IT82XX2_STACK_SIZE);               \
                                                                                                    \
 	PINCTRL_DT_INST_DEFINE(n);                                                                 \
                                                                                                    \
@@ -1643,7 +1634,8 @@ static int it82xx2_usb_driver_preinit(const struct device *dev)
 		.wu_irq = DT_INST_IRQ_BY_IDX(n, 1, irq),                                           \
 		.ep_cfg_in = ep_cfg_out,                                                           \
 		.ep_cfg_out = ep_cfg_in,                                                           \
-		.make_thread = udc_it82xx2_make_thread_##n,                                        \
+		.thread_stk = udc_it82xx2_stack_##n,                                               \
+		.thread_stk_sz = K_THREAD_STACK_SIZEOF(udc_it82xx2_stack_##n),                     \
 	};                                                                                         \
                                                                                                    \
 	static struct it82xx2_data priv_data_##n = {};                                             \
