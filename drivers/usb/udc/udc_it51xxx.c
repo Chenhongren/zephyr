@@ -92,9 +92,6 @@ static const uint8_t epn_tx_fifo_base[IT51XXX_UDC_NUM_ENDPOINTS] = {0x70, 0x90, 
 #define UDC74_EPN_TX_FIFO_CTRL 0x4
 #define FIFO_FORCE_EMPTY       BIT(0)
 
-#define IT51XXX_EVT_TYPE_MASK GENMASK(7, 0)
-#define IT51XXX_EVT_EP_MASK   GENMASK(15, 8)
-
 enum it51xxx_transaction_types {
 	IT51XXX_XFER_TYPE_SETUP = 0,
 	IT51XXX_XFER_TYPE_IN,
@@ -102,10 +99,9 @@ enum it51xxx_transaction_types {
 };
 
 enum it51xxx_event_type {
-	IT51XXX_EVT_XFER = 0,
-	IT51XXX_EVT_SETUP_TOKEN,
-	IT51XXX_EVT_OUT_TOKEN,
-	IT51XXX_EVT_IN_TOKEN,
+	IT51XXX_EVT_SETUP = 0,
+	IT51XXX_EVT_XFER_NEW,
+	IT51XXX_EVT_XFER_FINISHED,
 };
 
 enum it51xxx_ep_ctrl {
@@ -123,7 +119,9 @@ struct it51xxx_data {
 	struct k_thread thread_data;
 	struct k_sem suspended_sem;
 
-	struct k_msgq *evt_msgq;
+	struct k_event events;
+	atomic_t xfer_new;
+	atomic_t xfer_finished;
 
 	const struct device *dev;
 
@@ -134,6 +132,8 @@ struct it51xxx_data {
 
 	/* record if the previous transaction of control endpoint is stall */
 	bool stall_is_sent;
+
+	uint8_t setup[sizeof(struct usb_setup_packet)];
 };
 
 struct it51xxx_config {
@@ -170,14 +170,43 @@ struct it51xxx_config {
 	size_t thread_stk_sz;
 };
 
+static inline int ep2bitmap(const uint8_t ep)
+{
+	if (USB_EP_DIR_IS_IN(ep)) {
+		return 16UL + USB_EP_GET_IDX(ep);
+	}
+
+	return USB_EP_GET_IDX(ep);
+}
+
+static inline uint8_t bitmap2ep(uint32_t *const bitmap)
+{
+	unsigned int bit;
+
+	__ASSERT_NO_MSG(bitmap && *bitmap);
+
+	bit = find_lsb_set(*bitmap) - 1;
+	*bitmap &= ~BIT(bit);
+
+	if (bit >= 16) {
+		return USB_EP_DIR_IN | (bit - 16);
+	}
+
+	return USB_EP_DIR_OUT | bit;
+}
+
 static void it51xxx_event_submit(const struct device *dev, const uint8_t ep,
 				 const enum it51xxx_event_type type)
 {
 	struct it51xxx_data *priv = udc_get_private(dev);
-	uint32_t evt =
-		FIELD_PREP(IT51XXX_EVT_TYPE_MASK, type) | FIELD_PREP(IT51XXX_EVT_EP_MASK, ep);
 
-	k_msgq_put(priv->evt_msgq, &evt, K_NO_WAIT);
+	if (type == IT51XXX_EVT_XFER_FINISHED) {
+		atomic_set_bit(&priv->xfer_finished, ep2bitmap(ep));
+	}
+	if (type == IT51XXX_EVT_XFER_NEW) {
+		atomic_set_bit(&priv->xfer_new, ep2bitmap(ep));
+	}
+	k_event_post(&priv->events, BIT(type));
 }
 
 static void it51xxx_enable_resume_int(const struct device *dev, const bool enable)
@@ -335,13 +364,14 @@ static int it51xxx_ep_enqueue(const struct device *dev, struct udc_ep_config *co
 		}
 		if (bi->status) {
 			/* The OUT buffer is queued before the data-in stage finishes. To avoid
-			 * missing OUT status, firmware enables `EP_READY_ENABLE` in
-			 * `work_handler_in()` instead of immediately after queuing the OUT status
-			 * buffer. Therefore, no action is needed for OUT status here.
+			 * missing OUT status, firmware enables `EP_READY` in
+			 * `work_handler_xfer_finished()` instead of immediately after queuing
+			 * the OUT status buffer. Therefore, no action is needed for OUT status
+			 * here.
 			 *
 			 * If the ACK handshake of the last IN data transaction is corrupted,
 			 * hardware will not generate the xfer_done interrupt and will not clear
-			 * the `EP_READY_ENABLE` bit set for the IN data stage. In this case, the
+			 * the `EP_READY` bit set for the IN data stage. In this case, the
 			 * device still responds with ACK when the host initiates OUT status stage.
 			 */
 			return 0;
@@ -352,7 +382,7 @@ static int it51xxx_ep_enqueue(const struct device *dev, struct udc_ep_config *co
 		return 0;
 	}
 
-	it51xxx_event_submit(dev, cfg->addr, IT51XXX_EVT_XFER);
+	it51xxx_event_submit(dev, cfg->addr, IT51XXX_EVT_XFER_NEW);
 
 	return 0;
 }
@@ -469,7 +499,7 @@ static int it51xxx_ep_clear_halt(const struct device *dev, struct udc_ep_config 
 			if (udc_ep_is_busy(cfg)) {
 				udc_ep_set_busy(cfg, false);
 			}
-			it51xxx_event_submit(dev, cfg->addr, IT51XXX_EVT_XFER);
+			it51xxx_event_submit(dev, cfg->addr, IT51XXX_EVT_XFER_NEW);
 		}
 	}
 
@@ -895,12 +925,11 @@ static bool it51xxx_fake_token(const struct device *dev, const uint8_t ep, const
 	switch (token_type) {
 	case IT51XXX_XFER_TYPE_IN:
 		if (ep_idx == 0) {
-			struct udc_ep_config *ep_cfg;
+			struct udc_ep_config *ep_cfg = udc_get_ep_cfg(dev, USB_CONTROL_EP_IN);
 
 			if (priv->stall_is_sent) {
 				return true;
 			}
-			ep_cfg = udc_get_ep_cfg(dev, USB_CONTROL_EP_IN);
 
 			return udc_buf_peek(ep_cfg) == NULL;
 		}
@@ -941,77 +970,12 @@ static bool it51xxx_fake_token(const struct device *dev, const uint8_t ep, const
 	}
 }
 
-static inline int work_handler_in(const struct device *dev, uint8_t ep)
-{
-	struct it51xxx_data *priv = udc_get_private(dev);
-	struct udc_ep_config *ep_cfg;
-	struct net_buf *buf;
-
-	if (it51xxx_fake_token(dev, ep, IT51XXX_XFER_TYPE_IN)) {
-		return 0;
-	}
-
-	if (ep != USB_CONTROL_EP_IN) {
-		atomic_clear_bit(&priv->in_ep_state, USB_EP_GET_IDX(ep));
-	}
-
-	ep_cfg = udc_get_ep_cfg(dev, ep);
-
-	buf = udc_buf_peek(ep_cfg);
-	if (buf == NULL) {
-		LOG_ERR("ep %#x: no buffer to peek", ep);
-		return -ENODATA;
-	}
-
-	net_buf_pull(buf, min(buf->len, udc_mps_ep_size(ep_cfg)));
-
-	it51xxx_set_ep_ctrl(dev, ep, EP_DATA_SEQ_TOGGLE, true);
-
-	if (buf->len) {
-		work_handler_xfer_continue(dev, ep, buf);
-		return 0;
-	}
-
-	if (udc_ep_buf_has_zlp(buf)) {
-		work_handler_xfer_continue(dev, ep, buf);
-		udc_ep_buf_clear_zlp(buf);
-		return 0;
-	}
-
-	buf = udc_buf_get(ep_cfg);
-	if (buf == NULL) {
-		LOG_ERR("ep %#x: no buffer to get", ep);
-		return -ENODATA;
-	}
-
-	udc_ep_set_busy(ep_cfg, false);
-
-	if (ep == USB_CONTROL_EP_IN) {
-		struct udc_buf_info *bi = udc_get_buf_info(buf);
-
-		if (bi->data) {
-			/* The `EP_READY_ENABLE` bit enables responses to host-initiated
-			 * transactions and is shared by all transaction types (SETUP, IN, and OUT).
-			 * The bit is automatically cleared to 0 when the transaction completes.
-			 *
-			 * The `EP_READY_ENABLE` for OUT status stage must be enabled only after the
-			 * IN data token interrupt is received; otherwise the OUT status transaction
-			 * may be missed.
-			 */
-			it51xxx_set_ep_ctrl(dev, ep, EP_READY, true);
-		}
-	}
-
-	return udc_submit_ep_event(dev, buf, 0);
-}
-
 static inline int work_handler_setup(const struct device *dev, uint8_t ep)
 {
 	const struct it51xxx_config *config = dev->config;
 	mem_addr_t ctrl_base = config->base + epn_ctrl_base[USB_EP_GET_IDX(ep)];
 	mem_addr_t rx_fifo_base = config->base + epn_rx_fifo_base[USB_EP_GET_IDX(ep)];
 	struct it51xxx_data *priv = udc_get_private(dev);
-	uint8_t setup[sizeof(struct usb_setup_packet)];
 	size_t len;
 
 	if (sys_read8(ctrl_base + UDC41_EPN_STATUS) & STS_RX_ERROR_MASK) {
@@ -1031,92 +995,59 @@ static inline int work_handler_setup(const struct device *dev, uint8_t ep)
 	}
 
 	for (size_t idx = 0; idx < len; idx++) {
-		setup[idx] = sys_read8(rx_fifo_base + UDC60_EPN_RX_FIFO_DATA);
+		priv->setup[idx] = sys_read8(rx_fifo_base + UDC60_EPN_RX_FIFO_DATA);
 	}
-	LOG_HEXDUMP_DBG(setup, len, "setup:");
+	LOG_HEXDUMP_DBG(priv->setup, len, "setup:");
 
 	priv->stall_is_sent = false;
 
 	it51xxx_set_ep_ctrl(dev, USB_CONTROL_EP_OUT, EP_DATA_SEQ_1, true);
 
-	udc_setup_received(dev, setup);
+	it51xxx_event_submit(dev, ep, IT51XXX_EVT_SETUP);
 
 	return 0;
 }
 
-static inline int work_handler_out(const struct device *dev, uint8_t ep)
+static inline void work_handler_xfer_finished(const struct device *dev, uint8_t ep)
 {
-	const uint8_t ep_idx = USB_EP_GET_IDX(ep);
-	const struct it51xxx_config *config = dev->config;
-	struct it51xxx_data *priv = udc_get_private(dev);
-	mem_addr_t rx_fifo_base = config->base + epn_rx_fifo_base[ep_idx];
-	int ret;
-	size_t len;
+	struct udc_ep_config *ep_cfg = udc_get_ep_cfg(dev, ep);
 	struct net_buf *buf;
-	struct udc_ep_config *ep_cfg;
 
-	if (it51xxx_fake_token(dev, ep, IT51XXX_XFER_TYPE_OUT)) {
-		return 0;
-	}
+	if (USB_EP_GET_IDX(ep) == 0) {
+		buf = udc_buf_peek(ep_cfg);
 
-	ep_cfg = udc_get_ep_cfg(dev, ep);
-	buf = udc_buf_peek(ep_cfg);
-	if (buf == NULL) {
-		LOG_ERR("ep %#x: no buffer to peek", ep);
-		return -ENODATA;
-	}
-
-	len = (sys_read8(rx_fifo_base + UDC62_EPN_RX_FIFO_COUNT_MSB) << 8) +
-	      sys_read8(rx_fifo_base + UDC63_EPN_RX_FIFO_COUNT_LSB);
-
-	if (len > udc_mps_ep_size(ep_cfg)) {
-		LOG_ERR("failed to handle this packet due to the packet size");
-		return -ENOBUFS;
-	}
-
-	if (ep == USB_CONTROL_EP_OUT) {
-		if (udc_get_buf_info(buf)->status && len != 0) {
-			LOG_DBG("handled early setup token, %d", len);
-			buf = udc_buf_get(ep_cfg);
-			return udc_submit_ep_event(dev, buf, 0);
-		}
-	}
-
-	ret = it51xxx_xfer_out_data(dev, ep, buf, len);
-	if (ret) {
-		return ret;
-	}
-
-	LOG_DBG("ep %#x: handle data out, %zu | %zu", ep, len, net_buf_tailroom(buf));
-
-	udc_ep_set_busy(ep_cfg, false);
-
-	if (ep != USB_CONTROL_EP_OUT) {
-		atomic_clear_bit(&priv->out_ep_state, ep_idx);
-	}
-
-	if (net_buf_tailroom(buf) && len == udc_mps_ep_size(ep_cfg)) {
-		/* For non-control endpoints, the next out transfer will be started outside
-		 * this function. Do nothing here to avoid triggering it twice.
-		 */
-		if (ep == USB_CONTROL_EP_OUT) {
-			work_handler_xfer_continue(dev, ep, buf);
+		if (buf == NULL) {
+			return;
 		}
 
-		return 0;
+		if (ep == USB_CONTROL_EP_OUT && udc_get_buf_info(buf)->setup) {
+			return;
+		}
 	}
 
 	buf = udc_buf_get(ep_cfg);
 	if (buf == NULL) {
 		LOG_ERR("ep %#x: no buffer to get", ep);
-		return -ENODATA;
+		udc_submit_event(dev, UDC_EVT_ERROR, -ENOBUFS);
+		return;
 	}
 
-	ret = udc_submit_ep_event(dev, buf, 0);
+	udc_ep_set_busy(ep_cfg, false);
 
-	return ret;
+	if (ep == USB_CONTROL_EP_IN && udc_get_buf_info(buf)->data) {
+		/* The `EP_READY` bit enables responses to host-initiated
+		 * transactions and is shared by all transaction types (SETUP, IN, and OUT).
+		 * The bit is automatically cleared to 0 when the transaction completes.
+		 *
+		 * The `EP_READY` for OUT status stage must be enabled only after the
+		 * IN data token interrupt is received; otherwise the OUT status transaction
+		 * may be missed.
+		 */
+		it51xxx_set_ep_ctrl(dev, ep, EP_READY, true);
+	}
+
+	udc_submit_ep_event(dev, buf, 0);
 }
-
 static int work_handler_xfer_next(const struct device *dev, struct udc_ep_config *ep_cfg)
 {
 	struct net_buf *buf;
@@ -1138,50 +1069,60 @@ static void xfer_work_handler(void *arg1, void *arg2, void *arg3)
 
 	const struct device *dev = arg1;
 	struct it51xxx_data *priv = udc_get_private(dev);
+	struct udc_ep_config *ep_cfg;
+	uint32_t evt;
+	uint32_t eps;
+	uint8_t ep;
 
 	while (true) {
-		struct udc_ep_config *ep_cfg;
-		enum it51xxx_event_type type;
-		uint32_t evt;
-		uint8_t ep;
-		int ret = 0;
 
-		k_msgq_get(priv->evt_msgq, &evt, K_FOREVER);
-		ep = FIELD_GET(IT51XXX_EVT_EP_MASK, evt);
-		type = FIELD_GET(IT51XXX_EVT_TYPE_MASK, evt);
+		evt = k_event_wait(&priv->events, UINT32_MAX, false, K_FOREVER);
+		udc_lock_internal(dev, K_FOREVER);
 
-		ep_cfg = udc_get_ep_cfg(dev, ep);
+		if (evt & BIT(IT51XXX_EVT_XFER_FINISHED)) {
+			k_event_clear(&priv->events, BIT(IT51XXX_EVT_XFER_FINISHED));
 
-		switch (type) {
-		case IT51XXX_EVT_SETUP_TOKEN:
-			ret = work_handler_setup(dev, ep);
-			break;
-		case IT51XXX_EVT_IN_TOKEN:
-			ret = work_handler_in(dev, ep);
-			break;
-		case IT51XXX_EVT_OUT_TOKEN:
-			ret = work_handler_out(dev, ep);
-			break;
-		case IT51XXX_EVT_XFER:
-			if (ep == USB_CONTROL_EP_OUT) {
-				it51xxx_set_ep_ctrl(dev, 0, EP_READY, true);
-			}
-			break;
-		default:
-			LOG_ERR("unknown event type %#x", type);
-			ret = -EINVAL;
-			break;
-		}
+			eps = atomic_clear(&priv->xfer_finished);
 
-		if (ret) {
-			udc_submit_event(dev, UDC_EVT_ERROR, ret);
-		}
+			while (eps) {
+				ep = bitmap2ep(&eps);
+				ep_cfg = udc_get_ep_cfg(dev, ep);
 
-		if (ep != USB_CONTROL_EP_OUT && !udc_ep_is_busy(ep_cfg)) {
-			if (work_handler_xfer_next(dev, ep_cfg) == 0) {
-				udc_ep_set_busy(ep_cfg, true);
+				work_handler_xfer_finished(dev, ep);
+
+				if (ep != USB_CONTROL_EP_OUT && !udc_ep_is_busy(ep_cfg)) {
+					if (work_handler_xfer_next(dev, ep_cfg) == 0) {
+						udc_ep_set_busy(ep_cfg, true);
+					}
+				}
 			}
 		}
+
+		if (evt & BIT(IT51XXX_EVT_XFER_NEW)) {
+			k_event_clear(&priv->events, BIT(IT51XXX_EVT_XFER_NEW));
+			eps = atomic_clear(&priv->xfer_new);
+			while (eps) {
+				ep = bitmap2ep(&eps);
+				ep_cfg = udc_get_ep_cfg(dev, ep);
+
+				if (ep == USB_CONTROL_EP_OUT) {
+					it51xxx_set_ep_ctrl(dev, 0, EP_READY, true);
+				}
+
+				if (ep != USB_CONTROL_EP_OUT && !udc_ep_is_busy(ep_cfg)) {
+					if (work_handler_xfer_next(dev, ep_cfg) == 0) {
+						udc_ep_set_busy(ep_cfg, true);
+					}
+				}
+			}
+		}
+
+		if (evt & BIT(IT51XXX_EVT_SETUP)) {
+			k_event_clear(&priv->events, BIT(IT51XXX_EVT_SETUP));
+			udc_setup_received(dev, priv->setup);
+		}
+
+		udc_unlock_internal(dev);
 	}
 }
 
@@ -1237,47 +1178,106 @@ static inline bool ctrl_ep_is_stalled(const struct device *dev, const uint8_t tr
 	return false;
 }
 
-static void it51xxx_udc_process_in_stall(const struct device *dev, const uint8_t ep)
+static void it51xxx_udc_in_xfer_done(const struct device *dev, const uint8_t ep)
 {
 	struct it51xxx_data *priv = udc_get_private(dev);
 	struct udc_ep_config *ep_cfg = udc_get_ep_cfg(dev, ep);
 	struct net_buf *buf;
-	uint8_t ep_idx = USB_EP_GET_IDX(ep);
 
-	atomic_clear_bit(&priv->in_ep_state, ep_idx);
-	udc_ep_set_busy(ep_cfg, false);
 	buf = udc_buf_peek(ep_cfg);
-	if (!buf) {
-		LOG_WRN("ep %#x: (halted) null buffer", ep);
+	if (buf == NULL) {
+		LOG_ERR("ep %#x: %sno buffer to peek", ep, ep_cfg->stat.halted ? "(halted)" : "");
+		udc_submit_event(dev, UDC_EVT_ERROR, -ENOBUFS);
 		return;
 	}
 
-	it51xxx_xfer_in_data(dev, ep, buf);
+	if (ep != USB_CONTROL_EP_IN) {
+		atomic_clear_bit(&priv->in_ep_state, USB_EP_GET_IDX(ep));
+		if (ep_cfg->stat.halted) {
+			udc_ep_set_busy(ep_cfg, false);
+			work_handler_xfer_next(dev, ep_cfg);
+			return;
+		}
+	}
+
+	net_buf_pull(buf, min(buf->len, udc_mps_ep_size(ep_cfg)));
+
+	it51xxx_set_ep_ctrl(dev, ep, EP_DATA_SEQ_TOGGLE, true);
+
+	if (buf->len) {
+		work_handler_xfer_continue(dev, ep, buf);
+		return;
+	}
+
+	if (udc_ep_buf_has_zlp(buf)) {
+		work_handler_xfer_continue(dev, ep, buf);
+		udc_ep_buf_clear_zlp(buf);
+		return;
+	}
+
+	it51xxx_event_submit(dev, ep, IT51XXX_EVT_XFER_FINISHED);
 }
 
-static void it51xxx_udc_process_out_stall(const struct device *dev, const uint8_t ep)
+static void it51xxx_udc_out_xfer_done(const struct device *dev, const uint8_t ep)
 {
+	const uint8_t ep_idx = USB_EP_GET_IDX(ep);
 	const struct it51xxx_config *config = dev->config;
 	struct it51xxx_data *priv = udc_get_private(dev);
 	struct udc_ep_config *ep_cfg = udc_get_ep_cfg(dev, ep);
 	struct net_buf *buf;
-	size_t len;
-	uint8_t ep_idx = USB_EP_GET_IDX(ep);
 	mem_addr_t rx_fifo_base = config->base + epn_rx_fifo_base[ep_idx];
+	int ret;
+	size_t len;
+
+	buf = udc_buf_peek(ep_cfg);
+	if (buf == NULL) {
+		LOG_ERR("ep %#x: %sno buffer to peek", ep, ep_cfg->stat.halted ? "(halted)" : "");
+		udc_submit_event(dev, UDC_EVT_ERROR, -ENOBUFS);
+		return;
+	}
+
+	if (ep != USB_CONTROL_EP_OUT && ep_cfg->stat.halted) {
+		sys_write8(sys_read8(rx_fifo_base + UDC64_EPN_RX_FIFO_CTRL) | FIFO_FORCE_EMPTY,
+			   rx_fifo_base + UDC64_EPN_RX_FIFO_CTRL);
+		atomic_clear_bit(&priv->out_ep_state, ep_idx);
+		udc_ep_set_busy(ep_cfg, false);
+		work_handler_xfer_next(dev, ep_cfg);
+		return;
+	}
 
 	len = (sys_read8(rx_fifo_base + UDC62_EPN_RX_FIFO_COUNT_MSB) << 8) +
 	      sys_read8(rx_fifo_base + UDC63_EPN_RX_FIFO_COUNT_LSB);
 
-	buf = udc_buf_peek(ep_cfg);
-	if (!buf) {
-		LOG_WRN("ep %#x: (halted) null buffer", ep);
-	} else {
-		it51xxx_xfer_out_data(dev, ep, buf, len);
+	if (len > udc_mps_ep_size(ep_cfg)) {
+		LOG_ERR("ep %#x: packet size overflow", ep);
+		udc_submit_event(dev, UDC_EVT_ERROR, -EOVERFLOW);
+		return;
 	}
 
-	atomic_clear_bit(&priv->out_ep_state, ep_idx);
-	udc_ep_set_busy(ep_cfg, false);
-	work_handler_xfer_next(dev, ep_cfg);
+	if (ep == USB_CONTROL_EP_OUT && udc_get_buf_info(buf)->status && len != 0) {
+		LOG_DBG("handled early setup token, %zu", len);
+		it51xxx_event_submit(dev, ep, IT51XXX_EVT_XFER_FINISHED);
+		return;
+	}
+
+	ret = it51xxx_xfer_out_data(dev, ep, buf, len);
+	if (ret) {
+		udc_submit_event(dev, UDC_EVT_ERROR, ret);
+		return;
+	}
+
+	LOG_DBG("ep %#x: handle data out, %zu | %zu", ep, len, net_buf_tailroom(buf));
+
+	if (ep != USB_CONTROL_EP_OUT) {
+		atomic_clear_bit(&priv->out_ep_state, ep_idx);
+	}
+
+	if (net_buf_tailroom(buf) && len == udc_mps_ep_size(ep_cfg)) {
+		work_handler_xfer_continue(dev, ep, buf);
+		return;
+	}
+
+	it51xxx_event_submit(dev, ep, IT51XXX_EVT_XFER_FINISHED);
 }
 
 static void it51xxx_udc_xfer_done(const struct device *dev)
@@ -1292,13 +1292,17 @@ static void it51xxx_udc_xfer_done(const struct device *dev)
 		uint8_t ep = (xfer_type == IT51XXX_XFER_TYPE_IN ? USB_EP_DIR_IN : USB_EP_DIR_OUT) |
 			     ep_idx;
 
-		if (ep_idx == 0) {
-			if (ctrl_ep_is_stalled(dev, xfer_type)) {
+		if (ep_idx == 0 && ctrl_ep_is_stalled(dev, xfer_type)) {
+			continue;
+		}
+
+		if (xfer_type == IT51XXX_XFER_TYPE_SETUP) {
+			/* setup transactions are valid only on ctrl ep */
+			if (ep_idx != 0) {
 				continue;
 			}
 		} else {
-			if (xfer_type == IT51XXX_XFER_TYPE_SETUP ||
-			    it51xxx_fake_token(dev, ep, xfer_type)) {
+			if (it51xxx_fake_token(dev, ep, xfer_type)) {
 				continue;
 			}
 		}
@@ -1312,24 +1316,15 @@ static void it51xxx_udc_xfer_done(const struct device *dev)
 
 		switch (xfer_type) {
 		case IT51XXX_XFER_TYPE_SETUP:
-			/* setup xfer done */
-			it51xxx_event_submit(dev, ep, IT51XXX_EVT_SETUP_TOKEN);
+			work_handler_setup(dev, ep);
 			break;
 		case IT51XXX_XFER_TYPE_IN:
 			/* in xfer done */
-			if (ep_idx && udc_get_ep_cfg(dev, ep)->stat.halted) {
-				it51xxx_udc_process_in_stall(dev, ep);
-				break;
-			}
-			it51xxx_event_submit(dev, ep, IT51XXX_EVT_IN_TOKEN);
+			it51xxx_udc_in_xfer_done(dev, ep);
 			break;
 		case IT51XXX_XFER_TYPE_OUT:
 			/* out xfer done */
-			if (ep_idx && udc_get_ep_cfg(dev, ep)->stat.halted) {
-				it51xxx_udc_process_out_stall(dev, ep);
-				break;
-			}
-			it51xxx_event_submit(dev, ep, IT51XXX_EVT_OUT_TOKEN);
+			it51xxx_udc_out_xfer_done(dev, ep);
 			break;
 		default:
 			LOG_ERR("isr: unknown xfer type(%d)", xfer_type);
@@ -1412,6 +1407,9 @@ static int it51xxx_udc_preinit(const struct device *dev)
 	uint32_t clk_pll;
 
 	k_mutex_init(&data->mutex);
+	k_event_init(&priv->events);
+	atomic_clear(&priv->xfer_new);
+	atomic_clear(&priv->xfer_finished);
 
 	ret = clock_control_get_rate(config->clk_dev, (clock_control_subsys_t)&config->clk_cfg,
 				     &clk_pll);
@@ -1565,11 +1563,7 @@ BUILD_ASSERT(DT_ALL_INST_HAS_PROP_STATUS_OKAY(extend_ctrl) ||
 		.thread_stk_sz = K_THREAD_STACK_SIZEOF(udc_it51xxx_stack_##n),                     \
 	};                                                                                         \
                                                                                                    \
-	K_MSGQ_DEFINE(evt_msgq_##n, sizeof(uint32_t),                                              \
-		      CONFIG_UDC_IT51XXX_EVENT_COUNT, sizeof(uint32_t));                           \
-                                                                                                   \
 	static struct it51xxx_data priv_data_##n = {                                               \
-		.evt_msgq = &evt_msgq_##n,                                                         \
 	};                                                                                         \
                                                                                                    \
 	static struct udc_data udc_data_##n = {                                                    \
