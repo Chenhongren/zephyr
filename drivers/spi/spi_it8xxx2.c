@@ -321,7 +321,9 @@ static inline void spi_it8xxx2_tx_rx(const struct device *dev)
 			spi_context_update_tx(ctx, 1, ctx->tx_len);
 			spi_context_update_rx(ctx, 1, ctx->rx_len);
 		}
-
+		if (!ctx->rx_buf) {
+			spi_context_update_rx(ctx, 1, ctx->rx_len);
+		}
 		data->cmdq_data.data_length_lb = BYTE_0(ctx->rx_len);
 		data->cmdq_data.data_length_hb = BYTE_1(ctx->rx_len);
 		data->cmdq_data.data_addr_lb = 0;
@@ -342,6 +344,9 @@ static inline void spi_it8xxx2_tx_rx(const struct device *dev)
 		data->cmdq_data.check_bit_mask |= ((BYTE_2(mem_address)) & 0x03);
 		if (ctx->rx_buf == ctx->tx_buf) {
 			spi_context_update_tx(ctx, 1, ctx->tx_len);
+			spi_context_update_rx(ctx, 1, ctx->rx_len);
+		}
+		if (!ctx->rx_buf) {
 			spi_context_update_rx(ctx, 1, ctx->rx_len);
 		}
 		data->transfer_len = ctx->tx_len;
