@@ -51,6 +51,7 @@
 	soc {
 		#address-cells = <1>;
 		#size-cells = <1>;
+		interrupt-parent = <&intc>;
 		ranges;
 
 		flashctrl: flash-controller@f01000 {
@@ -96,14 +97,12 @@
 			reg = <0xf04500 0xc1>;
 			channel-count = <8>;
 			interrupts = <8 IRQ_TYPE_LEVEL_HIGH>;
-			interrupt-parent = <&intc>;
 			status = "disabled";
 			#io-channel-cells = <1>;
 		};
 
 		vcmp0: vcmp@f04520 {
 			compatible = "ite,it51xxx-vcmp";
-			interrupt-parent = <&intc>;
 			interrupts = <IT51XXX_IRQ_V_CMP IRQ_TYPE_LEVEL_HIGH>;
 			reg = <0xf04520 0x08
 			       0xf04500 0xc1>; /* vcmp base address */
@@ -113,7 +112,6 @@
 
 		vcmp1: vcmp@f04528 {
 			compatible = "ite,it51xxx-vcmp";
-			interrupt-parent = <&intc>;
 			interrupts = <IT51XXX_IRQ_V_CMP IRQ_TYPE_LEVEL_HIGH>;
 			reg = <0xf04528 0x08
 			       0xf04500 0xc1>; /* vcmp base address */
@@ -123,7 +121,6 @@
 
 		vcmp2: vcmp@f0452c {
 			compatible = "ite,it51xxx-vcmp";
-			interrupt-parent = <&intc>;
 			interrupts = <IT51XXX_IRQ_V_CMP IRQ_TYPE_LEVEL_HIGH>;
 			reg = <0xf0452c 0x08
 			       0xf04500 0xc1>; /* vcmp base address */
@@ -154,7 +151,6 @@
 				      IT51XXX_IRQ_WU82 IRQ_TYPE_LEVEL_HIGH
 				      IT51XXX_IRQ_WU83 IRQ_TYPE_LEVEL_HIGH
 				      IT51XXX_IRQ_WU100 IRQ_TYPE_LEVEL_HIGH>;
-			interrupt-parent = <&intc>;
 			wucctrl = <&wuc_wu91    /* GPA0 */
 				   &wuc_wu92    /* GPA1 */
 				   &wuc_wu93    /* GPA2 */
@@ -184,7 +180,6 @@
 				      NO_FUNC 0
 				      IT51XXX_IRQ_WU104 IRQ_TYPE_LEVEL_HIGH
 				      IT51XXX_IRQ_WU105 IRQ_TYPE_LEVEL_HIGH>;
-			interrupt-parent = <&intc>;
 			wucctrl = <&wuc_wu101   /* GPB0 */
 				   &wuc_wu102   /* GPB1 */
 				   &wuc_wu84    /* GPB2 */
@@ -214,7 +209,6 @@
 				      IT51XXX_IRQ_WU109 IRQ_TYPE_LEVEL_HIGH
 				      IT51XXX_IRQ_WU23 IRQ_TYPE_LEVEL_HIGH
 				      IT51XXX_IRQ_WU86 IRQ_TYPE_LEVEL_HIGH>;
-			interrupt-parent = <&intc>;
 			wucctrl = <&wuc_wu85   /* GPC0 */
 				   &wuc_wu107  /* GPC1 */
 				   &wuc_wu95   /* GPC2 */
@@ -245,7 +239,6 @@
 				      IT51XXX_IRQ_WU112 IRQ_TYPE_LEVEL_HIGH
 				      IT51XXX_IRQ_WU113 IRQ_TYPE_LEVEL_HIGH
 				      IT51XXX_IRQ_WU87 IRQ_TYPE_LEVEL_HIGH>;
-			interrupt-parent = <&intc>;
 			wucctrl = <&wuc_wu20   /* GPD0 */
 				   &wuc_wu21   /* GPD1 */
 				   &wuc_wu24   /* GPD2 */
@@ -276,7 +269,6 @@
 				      IT51XXX_IRQ_WU40 IRQ_TYPE_LEVEL_HIGH
 				      IT51XXX_IRQ_WU45 IRQ_TYPE_LEVEL_HIGH
 				      IT51XXX_IRQ_WU46 IRQ_TYPE_LEVEL_HIGH>;
-			interrupt-parent = <&intc>;
 			wucctrl = <&wuc_wu70   /* GPE0 */
 				   &wuc_wu71   /* GPE1 */
 				   &wuc_wu72   /* GPE2 */
@@ -307,7 +299,6 @@
 				      IT51XXX_IRQ_WU65 IRQ_TYPE_LEVEL_HIGH
 				      IT51XXX_IRQ_WU66 IRQ_TYPE_LEVEL_HIGH
 				      IT51XXX_IRQ_WU67 IRQ_TYPE_LEVEL_HIGH>;
-			interrupt-parent = <&intc>;
 			wucctrl = <&wuc_wu96   /* GPF0 */
 				   &wuc_wu97   /* GPF1 */
 				   &wuc_wu98   /* GPF2 */
@@ -338,7 +329,6 @@
 				      NO_FUNC 0
 				      IT51XXX_IRQ_WU118 IRQ_TYPE_LEVEL_HIGH
 				      NO_FUNC 0>;
-			interrupt-parent = <&intc>;
 			wucctrl = <&wuc_wu115     /* GPG0 */
 				   &wuc_wu116     /* GPG1 */
 				   &wuc_wu117     /* GPG2 */
@@ -369,7 +359,6 @@
 				      IT51XXX_IRQ_WU89 IRQ_TYPE_LEVEL_HIGH
 				      IT51XXX_IRQ_WU90 IRQ_TYPE_LEVEL_HIGH
 				      IT51XXX_IRQ_WU127 IRQ_TYPE_LEVEL_HIGH>;
-			interrupt-parent = <&intc>;
 			wucctrl = <&wuc_wu60    /* GPH0 */
 				   &wuc_wu61    /* GPH1 */
 				   &wuc_wu62    /* GPH2 */
@@ -400,7 +389,6 @@
 				      IT51XXX_IRQ_WU75 IRQ_TYPE_LEVEL_HIGH
 				      IT51XXX_IRQ_WU76 IRQ_TYPE_LEVEL_HIGH
 				      IT51XXX_IRQ_WU77 IRQ_TYPE_LEVEL_HIGH>;
-			interrupt-parent = <&intc>;
 			wucctrl = <&wuc_wu119  /* GPI0 */
 				   &wuc_wu120  /* GPI1 */
 				   &wuc_wu121  /* GPI2 */
@@ -431,7 +419,6 @@
 				      IT51XXX_IRQ_WU133 IRQ_TYPE_LEVEL_HIGH
 				      IT51XXX_IRQ_WU134 IRQ_TYPE_LEVEL_HIGH
 				      IT51XXX_IRQ_WU135 IRQ_TYPE_LEVEL_HIGH>;
-			interrupt-parent = <&intc>;
 			wucctrl = <&wuc_wu128   /* GPJ0 */
 				   &wuc_wu129   /* GPJ1 */
 				   &wuc_no_func /* NO_FUNC */
@@ -462,7 +449,6 @@
 				      NO_FUNC 0
 				      NO_FUNC 0
 				      NO_FUNC 0>;
-			interrupt-parent = <&intc>;
 			wucctrl = <&wuc_no_func /* NO_FUNC */
 				   &wuc_no_func
 				   &wuc_no_func
@@ -492,7 +478,6 @@
 				      IT51XXX_IRQ_WU141 IRQ_TYPE_LEVEL_HIGH
 				      IT51XXX_IRQ_WU142 IRQ_TYPE_LEVEL_HIGH
 				      NO_FUNC 0>;
-			interrupt-parent = <&intc>;
 			wucctrl = <&wuc_wu136     /* GPL0 */
 				   &wuc_wu137     /* GPL1 */
 				   &wuc_wu138     /* GPL2 */
@@ -521,7 +506,6 @@
 				      IT51XXX_IRQ_WU148 IRQ_TYPE_LEVEL_HIGH
 				      IT51XXX_IRQ_WU149 IRQ_TYPE_LEVEL_HIGH
 				      IT51XXX_IRQ_WU150 IRQ_TYPE_LEVEL_HIGH>;
-			interrupt-parent = <&intc>;
 			wucctrl = <&wuc_wu144   /* GPM0 */
 				   &wuc_wu145   /* GPM1 */
 				   &wuc_wu146   /* GPM2 */
@@ -550,7 +534,6 @@
 				      IT51XXX_IRQ_WKINTC IRQ_TYPE_LEVEL_HIGH
 				      IT51XXX_IRQ_WKINTC IRQ_TYPE_LEVEL_HIGH
 				      IT51XXX_IRQ_WKINTC IRQ_TYPE_LEVEL_HIGH>;
-			interrupt-parent = <&intc>;
 			wucctrl = <&wuc_wu30   /* GPN0 */
 				   &wuc_wu31   /* GPN1 */
 				   &wuc_wu32   /* GPN2 */
@@ -1001,7 +984,6 @@
 			       0x00f04200 0x0020>;
 			interrupts = <IT51XXX_IRQ_SMB_A IRQ_TYPE_LEVEL_HIGH
 				      IT51XXX_IRQ_SMB_SA IRQ_TYPE_LEVEL_HIGH>;
-			interrupt-parent = <&intc>;
 			scl-gpios = <&gpiof 2 0>;
 			sda-gpios = <&gpiof 3 0>;
 			port-num = <SMB_CHANNEL_A>;
@@ -1018,7 +1000,6 @@
 			       0x00f04220 0x0020>;
 			interrupts = <IT51XXX_IRQ_SMB_B IRQ_TYPE_LEVEL_HIGH
 				      IT51XXX_IRQ_SMB_SB IRQ_TYPE_LEVEL_HIGH>;
-			interrupt-parent = <&intc>;
 			scl-gpios = <&gpioc 1 0>;
 			sda-gpios = <&gpioc 2 0>;
 			port-num = <SMB_CHANNEL_B>;
@@ -1035,7 +1016,6 @@
 			       0x00f04240 0x0020>;
 			interrupts = <IT51XXX_IRQ_SMB_C IRQ_TYPE_LEVEL_HIGH
 				      IT51XXX_IRQ_SMB_SC IRQ_TYPE_LEVEL_HIGH>;
-			interrupt-parent = <&intc>;
 			scl-gpios = <&gpiof 6 0>;
 			sda-gpios = <&gpiof 7 0>;
 			port-num = <SMB_CHANNEL_C>;
@@ -1052,7 +1032,6 @@
 			       0 1>;
 			interrupts = <IT51XXX_IRQ_SMB_D IRQ_TYPE_LEVEL_HIGH
 				      0 0>;
-			interrupt-parent = <&intc>;
 			scl-gpios = <&gpioh 1 0>;
 			sda-gpios = <&gpioh 2 0>;
 			port-num = <SMB_CHANNEL_D>;
@@ -1069,7 +1048,6 @@
 			       0 1>;
 			interrupts = <IT51XXX_IRQ_SMB_E IRQ_TYPE_LEVEL_HIGH
 				      0 0>;
-			interrupt-parent = <&intc>;
 			scl-gpios = <&gpioe 0 0>;
 			sda-gpios = <&gpioe 7 0>;
 			port-num = <SMB_CHANNEL_E>;
@@ -1086,7 +1064,6 @@
 			       0 1>;
 			interrupts = <IT51XXX_IRQ_SMB_F IRQ_TYPE_LEVEL_HIGH
 				      0 0>;
-			interrupt-parent = <&intc>;
 			scl-gpios = <&gpioa 4 0>;
 			sda-gpios = <&gpioa 5 0>;
 			port-num = <SMB_CHANNEL_F>;
@@ -1103,7 +1080,6 @@
 			       0 1>;
 			interrupts = <IT51XXX_IRQ_SMB_G IRQ_TYPE_LEVEL_HIGH
 				      0 0>;
-			interrupt-parent = <&intc>;
 			scl-gpios = <&gpiod 0 0>;
 			sda-gpios = <&gpiod 1 0>;
 			port-num = <SMB_CHANNEL_G>;
@@ -1120,7 +1096,6 @@
 			       0 1>;
 			interrupts = <IT51XXX_IRQ_SMB_H IRQ_TYPE_LEVEL_HIGH
 				      0 0>;
-			interrupt-parent = <&intc>;
 			scl-gpios = <&gpiob 2 0>;
 			sda-gpios = <&gpioh 0 0>;
 			port-num = <SMB_CHANNEL_H>;
@@ -1137,7 +1112,6 @@
 			       0 1>;
 			interrupts = <IT51XXX_IRQ_SMB_I IRQ_TYPE_LEVEL_HIGH
 				      0 0>;
-			interrupt-parent = <&intc>;
 			scl-gpios = <&gpiob 5 0>;
 			sda-gpios = <&gpioj 6 0>;
 			port-num = <SMB_CHANNEL_I>;
@@ -1164,7 +1138,6 @@
 			current-speed = <115200>;
 			clock-frequency = <1843200>;
 			interrupts = <38 IRQ_TYPE_EDGE_RISING>;
-			interrupt-parent = <&intc>;
 			reg-shift = <0>;
 		};
 
@@ -1174,7 +1147,6 @@
 			status = "disabled";
 			wucctrl = <&wuc_wu86>; /* GPC7 */
 			interrupts = <IT51XXX_IRQ_WU86 IRQ_TYPE_LEVEL_HIGH>;
-			interrupt-parent = <&intc>;
 			clocks = <&ecpm IT51XXX_ECPM_CGCTRL3R_OFF BIT(2)>;
 		};
 
@@ -1185,7 +1157,6 @@
 			current-speed = <460800>;
 			clock-frequency = <1843200>;
 			interrupts = <39 IRQ_TYPE_EDGE_RISING>;
-			interrupt-parent = <&intc>;
 			reg-shift = <0>;
 		};
 
@@ -1195,7 +1166,6 @@
 			status = "disabled";
 			wucctrl = <&wuc_wu61>; /* GPH1 */
 			interrupts = <IT51XXX_IRQ_WU61 IRQ_TYPE_LEVEL_HIGH>;
-			interrupt-parent = <&intc>;
 			clocks = <&ecpm IT51XXX_ECPM_CGCTRL3R_OFF BIT(2)>;
 		};
 
@@ -1214,7 +1184,6 @@
 				      IT51XXX_IRQ_TIMER4_DW IRQ_TYPE_EDGE_RISING   /* Free run */
 				      IT51XXX_IRQ_TIMER5_DW IRQ_TYPE_EDGE_RISING   /* Busy wait */
 				      IT51XXX_IRQ_TIMER6_DW IRQ_TYPE_EDGE_RISING>; /* Busy wait */
-			interrupt-parent = <&intc>;
 		};
 
 		counter0: counter@f04730 {
@@ -1222,14 +1191,12 @@
 			reg = <0x00f04730 0xcf>;
 			interrupts = <IT51XXX_IRQ_TIMER7_DW IRQ_TYPE_EDGE_RISING   /* Alarm timer */
 				      IT51XXX_IRQ_TIMER8_DW IRQ_TYPE_EDGE_RISING>; /* Top timer */
-			interrupt-parent = <&intc>;
 			status = "disabled";
 		};
 
 		kbd: kbd@f01d00 {
 			compatible = "ite,it51xxx-kbd";
 			reg = <0x00f01d00 0x29>;
-			interrupt-parent = <&intc>;
 			interrupts = <IT51XXX_IRQ_WKINTC IRQ_TYPE_LEVEL_HIGH>;
 			status = "disabled";
 			wucctrl = <&wuc_wu30   /* KSI[0] */
@@ -1265,7 +1232,6 @@
 				      IT51XXX_IRQ_PMC3_IBF IRQ_TYPE_LEVEL_HIGH
 				      IT51XXX_IRQ_PMC4_IBF IRQ_TYPE_LEVEL_HIGH
 				      IT51XXX_IRQ_PMC5_IBF IRQ_TYPE_LEVEL_HIGH>;
-			interrupt-parent = <&intc>;
 			wucctrl = <&wuc_wu42>;
 			#address-cells = <1>;
 			#size-cells = <1>;
@@ -1276,7 +1242,6 @@
 			compatible = "ite,it51xxx-watchdog";
 			reg = <0x00f04780 0x20>;
 			interrupts = <IT51XXX_IRQ_TIMER1_DW IRQ_TYPE_EDGE_RISING>; /* Warn timer */
-			interrupt-parent = <&intc>;
 		};
 
 		pwm0: pwm@f04600 {
@@ -1374,7 +1339,6 @@
 			reg = <0x00f03c00 0x0053>;
 			status = "disabled";
 			interrupts = <IT51XXX_IRQ_I3C_M0 IRQ_TYPE_LEVEL_HIGH>;
-			interrupt-parent = <&intc>;
 			#address-cells = <3>;
 			#size-cells = <0>;
 			io-channel = <0>;
@@ -1385,7 +1349,6 @@
 			reg = <0x00f03c80 0x0053>;
 			status = "disabled";
 			interrupts = <IT51XXX_IRQ_I3C_M1 IRQ_TYPE_LEVEL_HIGH>;
-			interrupt-parent = <&intc>;
 			#address-cells = <3>;
 			#size-cells = <0>;
 			io-channel = <1>;
@@ -1396,7 +1359,6 @@
 			reg = <0x00f03d00 0x007a>;
 			status = "disabled";
 			interrupts = <IT51XXX_IRQ_I3C_S0 IRQ_TYPE_LEVEL_HIGH>;
-			interrupt-parent = <&intc>;
 			#address-cells = <1>;
 			#size-cells = <0>;
 			io-channel = <2>;
@@ -1408,7 +1370,6 @@
 			reg = <0x00f03d80 0x007a>;
 			status = "disabled";
 			interrupts = <IT51XXX_IRQ_I3C_S1 IRQ_TYPE_LEVEL_HIGH>;
-			interrupt-parent = <&intc>;
 			#address-cells = <1>;
 			#size-cells = <0>;
 			io-channel = <3>;
@@ -1426,7 +1387,6 @@
 			#size-cells = <0>;
 			compatible = "ite,it51xxx-spi";
 			reg = <0x00f02600 0x24>;
-			interrupt-parent = <&intc>;
 			interrupts = <IT51XXX_IRQ_SPI IRQ_TYPE_LEVEL_HIGH>;
 			clocks = <&ecpm IT51XXX_ECPM_CGCTRL3R_OFF BIT(1)>;
 			status = "disabled";
@@ -1448,7 +1408,6 @@
 			       0x00f02000 1>; /* GCTRL */
 			interrupts = <IT51XXX_IRQ_RTCT_ALARM1 IRQ_TYPE_EDGE_RISING   /* RTC0 */
 				      IT51XXX_IRQ_RTCT_ALARM2 IRQ_TYPE_EDGE_RISING>; /* RTC1 */
-			interrupt-parent = <&intc>;
 			alarms-count = <2>;
 			status = "disabled";
 		};
@@ -1460,7 +1419,6 @@
 			status = "disabled";
 			reg = <0x00f04100 0x0028>;
 			interrupts = <IT51XXX_IRQ_SMB_A IRQ_TYPE_LEVEL_HIGH>;
-			interrupt-parent = <&intc>;
 			port-num = <SMB_CHANNEL_A>;
 			fifo-enable;   /* FIFO1 */
 		};
@@ -1472,7 +1430,6 @@
 			status = "disabled";
 			reg = <0x00f04128 0x0028>;
 			interrupts = <IT51XXX_IRQ_SMB_B IRQ_TYPE_LEVEL_HIGH>;
-			interrupt-parent = <&intc>;
 			port-num = <SMB_CHANNEL_B>;
 			fifo-enable;   /* FIFO2 */
 		};
@@ -1484,7 +1441,6 @@
 			status = "disabled";
 			reg = <0x00f04150 0x0028>;
 			interrupts = <IT51XXX_IRQ_SMB_C IRQ_TYPE_LEVEL_HIGH>;
-			interrupt-parent = <&intc>;
 			port-num = <SMB_CHANNEL_C>;
 			/delete-property/ fifo-enable;   /* FIFO2 */
 		};
@@ -1496,7 +1452,6 @@
 			status = "disabled";
 			reg = <0x00f04178 0x0028>;
 			interrupts = <IT51XXX_IRQ_SMB_D IRQ_TYPE_LEVEL_HIGH>;
-			interrupt-parent = <&intc>;
 			port-num = <SMB_CHANNEL_D>;
 			/delete-property/ fifo-enable;   /* FIFO2 */
 		};
@@ -1508,7 +1463,6 @@
 			status = "disabled";
 			reg = <0x00f041a0 0x0028>;
 			interrupts = <IT51XXX_IRQ_SMB_E IRQ_TYPE_LEVEL_HIGH>;
-			interrupt-parent = <&intc>;
 			port-num = <SMB_CHANNEL_E>;
 			/delete-property/ fifo-enable;   /* FIFO2 */
 		};
@@ -1520,7 +1474,6 @@
 			status = "disabled";
 			reg = <0x00f041c8 0x0028>;
 			interrupts = <IT51XXX_IRQ_SMB_F IRQ_TYPE_LEVEL_HIGH>;
-			interrupt-parent = <&intc>;
 			port-num = <SMB_CHANNEL_F>;
 			/delete-property/ fifo-enable;   /* FIFO2 */
 		};
@@ -1532,7 +1485,6 @@
 			status = "disabled";
 			reg = <0x00f04260 0x0028>;
 			interrupts = <IT51XXX_IRQ_SMB_G IRQ_TYPE_LEVEL_HIGH>;
-			interrupt-parent = <&intc>;
 			port-num = <SMB_CHANNEL_G>;
 			/delete-property/ fifo-enable;   /* FIFO2 */
 		};
@@ -1544,7 +1496,6 @@
 			status = "disabled";
 			reg = <0x00f04288 0x0028>;
 			interrupts = <IT51XXX_IRQ_SMB_H IRQ_TYPE_LEVEL_HIGH>;
-			interrupt-parent = <&intc>;
 			port-num = <SMB_CHANNEL_H>;
 			/delete-property/ fifo-enable;   /* FIFO2 */
 		};
@@ -1556,7 +1507,6 @@
 			status = "disabled";
 			reg = <0x00f042b0 0x0028>;
 			interrupts = <IT51XXX_IRQ_SMB_I IRQ_TYPE_LEVEL_HIGH>;
-			interrupt-parent = <&intc>;
 			port-num = <SMB_CHANNEL_H>;
 			/delete-property/ fifo-enable;   /* FIFO2 */
 		};
