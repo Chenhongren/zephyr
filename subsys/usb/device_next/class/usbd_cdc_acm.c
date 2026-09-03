@@ -645,6 +645,9 @@ static __maybe_unused int cdc_acm_send_notification(const struct device *dev,
 	}
 
 	net_buf_add_mem(buf, &notification, sizeof(struct cdc_acm_notification));
+
+	struct udc_buf_info *bi = udc_get_buf_info(buf);
+	// printk("enqueue ep %#x %d\n", bi->ep, __LINE__);
 	ret = usbd_ep_enqueue(c_data, buf);
 	if (ret) {
 		net_buf_unref(buf);
@@ -709,6 +712,8 @@ static void cdc_acm_tx_fifo_handler(struct k_work *work)
 
 	data->zlp_needed = len != 0 && len % cdc_acm_get_bulk_mps(c_data) == 0;
 
+	struct udc_buf_info *bi = udc_get_buf_info(buf);
+	// printk("enqueue ep %#x %d\n", bi->ep, __LINE__);
 	ret = usbd_ep_enqueue(c_data, buf);
 	if (ret) {
 		LOG_ERR("Failed to enqueue");
@@ -755,6 +760,7 @@ static void cdc_acm_rx_fifo_handler(struct k_work *work)
 
 		bi = udc_get_buf_info(buf);
 		bi->ep = cdc_acm_get_bulk_out(c_data);
+		// printk("enqueue ep %#x %d\n", bi->ep, __LINE__);
 		if (usbd_ep_enqueue(c_data, buf) != 0) {
 			LOG_ERR("Failed to enqueue net_buf for 0x%02x", bi->ep);
 			net_buf_unref(buf);
