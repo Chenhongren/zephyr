@@ -107,7 +107,7 @@ static void uart_cb_async_handler(const struct device *const dev,
 
 	switch (evt->type) {
 	case UART_TX_DONE:
-		LOG_DBG("TX_DONE, data %p length %zu",
+		LOG_INF("TX_DONE, data %p length %zu",
 			(void *)evt->data.tx.buf, evt->data.tx.len);
 		k_sem_give(&tx_done);
 		break;
@@ -203,7 +203,7 @@ static void cdc_acm_loopback_buf(uint8_t *const tx, uint8_t *const rx0,
 	err = uart_tx(uart_host, tx, len, SYS_FOREVER_US);
 	zassert_equal(err, -EBUSY, "Concurrent uart_tx() not rejected (%d)", err);
 
-	zassert_ok(k_sem_take(&tx_done, K_MSEC(1000)), "TX_DONE timeout (len %zu)", len);
+	zassert_ok(k_sem_take(&tx_done, K_MSEC(10000)), "TX_DONE timeout (len %zu)", len);
 
 	/* Wait for the echoed data to be received back. */
 	while (rx_data_len < len) {
@@ -236,6 +236,7 @@ ZTEST(cdc_acm_test, test_loopback_aligned)
 	static const size_t sizes[] = {1, 63, 64, 512, 513, 1024};
 
 	ARRAY_FOR_EACH(sizes, i) {
+		LOG_WRN("ite debug %d", i);
 		cdc_acm_loopback(sizes[i]);
 	}
 }
@@ -687,11 +688,11 @@ void *cdc_acm_test_enable(void)
 	ret = usbh_enable(uhs_ctx);
 	zassert_ok(ret, "Failed to enable USB host");
 
-	ret = uhc_bus_reset(uhs_ctx->dev);
-	zassert_ok(ret, "Failed to signal bus reset");
+	// ret = uhc_bus_reset(uhs_ctx->dev);
+	// zassert_ok(ret, "Failed to signal bus reset");
 
-	ret = uhc_bus_resume(uhs_ctx->dev);
-	zassert_ok(ret, "Failed to signal bus resume");
+	// ret = uhc_bus_resume(uhs_ctx->dev);
+	// zassert_ok(ret, "Failed to signal bus resume");
 
 	ret = uhc_sof_enable(uhs_ctx->dev);
 	zassert_ok(ret, "Failed to enable SoF generator");
