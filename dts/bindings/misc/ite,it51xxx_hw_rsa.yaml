@@ -1,0 +1,15 @@
+# Copyright (c) 2026 ITE Corporation. All Rights Reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+description: IT51XXX Hardware RSA controller
+
+compatible: "ite,it51xxx-hw-rsa"
+
+include: [base.yaml]
+
+properties:
+  reg:
+    required: true
+
+  interrupts:
+    required: true

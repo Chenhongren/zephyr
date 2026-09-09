@@ -1,0 +1,21 @@
+# Copyright (c) 2026 ITE Corporation.
+# SPDX-License-Identifier: Apache-2.0
+
+config IT51XXX_HW_RSA_CALCULATION
+	bool "IT51XXX hardware RSA calculation"
+	default y
+	select PM
+	select SOC_IT51XXX_CPU_IDLE_GATING
+	depends on DT_HAS_ITE_IT51XXX_HW_RSA_ENABLED
+	help
+	  This option enables it51xxx hardware RSA calculation.
+
+if IT51XXX_HW_RSA_CALCULATION
+
+config IT51XXX_HW_RSA_CALCULATION_TIMEOUT_MS
+	int "Set the hardware RSA calculation timeout in milliseconds"
+	default 10000
+	help
+	  This option sets RSA calculation timeout in milliseconds.
+
+endif #IT51XXX_HW_RSA_CALCULATION

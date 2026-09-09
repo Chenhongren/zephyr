@@ -1558,5 +1558,15 @@
 			port-num = <SMB_CHANNEL_H>;
 			/delete-property/ fifo-enable;   /* FIFO2 */
 		};
+
+		hw_rsa: hw-rsa@0xf03b00 {
+			compatible = "ite,it51xxx-hw-rsa";
+			reg = <0xf03b00 0x00aa 0x83e000 0x400 0x83e400 0x600 0x83ea00 0x600>;
+			#address-cells = <1>;
+			#size-cells = <0>;
+			interrupts = <IT51XXX_IRQ_CRYPTO IRQ_TYPE_LEVEL_HIGH>;
+			interrupt-parent = <&intc>;
+			status = "disabled";
+		};
 	};
 };
