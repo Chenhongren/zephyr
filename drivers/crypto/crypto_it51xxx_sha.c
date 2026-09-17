@@ -9,6 +9,7 @@
 #include <errno.h>
 #include <it51xxx/chip_chipregs.h>
 #include <zephyr/crypto/crypto.h>
+#include <zephyr/drivers/mfd/ite_it51xxx.h>
 #include <zephyr/kernel.h>
 #include <zephyr/sys/byteorder.h>
 
@@ -39,98 +40,83 @@ LOG_MODULE_REGISTER(crypto_it51xxx_sha, CONFIG_CRYPTO_LOG_LEVEL);
 /* 0x06: SHA DLM Base Address 2 Register (SHADBA2R) */
 #define IT51XXX_SHADBA2R        0x06
 
-#define SHA_SHA256_HASH_LEN        32
-#define SHA_SHA256_BLOCK_LEN       64
-#define SHA_SHA256_HASH_LEN_WORDS  (SHA_SHA256_HASH_LEN / sizeof(uint32_t))
-#define SHA_SHA256_BLOCK_LEN_WORDS (SHA_SHA256_BLOCK_LEN / sizeof(uint32_t))
-
-/*
- * If the input message is more than 1K bytes, taking 10K bytes for example,
- * it should run 10 times SHA hardwired loading and execution, and process 1K bytes each time.
- */
-#define SHA_HW_MAX_INPUT_LEN       1024
-#define SHA_HW_MAX_INPUT_LEN_WORDS (SHA_HW_MAX_INPUT_LEN / sizeof(uint32_t))
-
 #define IT51XXX_SHA_INIT 1U
 
-/*
- * This struct is used by the hardware and must be stored in RAM first 4k-byte
- * and aligned on a 256-byte boundary.
- */
-struct chip_sha256_ctx {
-	union {
-		/* SHA data buffer */
-		uint32_t w_sha[SHA_HW_MAX_INPUT_LEN_WORDS];
-		uint8_t w_input[SHA_HW_MAX_INPUT_LEN];
-	};
-	/* H[0] ~ H[7] */
-	uint32_t h[SHA_SHA256_HASH_LEN_WORDS];
-	uint32_t sha_init;
-	uint32_t w_input_index;
-	uint32_t total_len;
-} __aligned(256);
-
-Z_GENERIC_SECTION(.__hwcrypto_dlm_block) struct chip_sha256_ctx chip_ctx;
+#define sha_dlm hwcrypto_dlm.sha
 
 struct it51xxx_sha_config {
-	mm_reg_t base;
+	const struct device *mfd;
 };
 
 struct it51xxx_sha_data {
 	/* semaphore for sha execution or writing back hash complete */
 	struct k_sem sha_done;
+	bool sha_is_init;
 };
 
 static void it51xxx_sha256_init(const struct device *dev)
 {
 	const struct it51xxx_sha_config *config = dev->config;
+	const mm_reg_t base = mfd_ite_it51xxx_get_base(config->mfd);
 
-	chip_ctx.sha_init = IT51XXX_SHA_INIT;
-	chip_ctx.total_len = 0;
-	chip_ctx.w_input_index = 0;
+	sha_dlm.sha_init = IT51XXX_SHA_INIT;
+	sha_dlm.total_len = 0;
+	sha_dlm.w_input_index = 0;
 
 	/* Set DLM address for input data */
-	sys_write8(((uint32_t)&chip_ctx) & 0xC0, config->base + IT51XXX_SHADBA0R);
-	sys_write8(((uint32_t)&chip_ctx) >> 8, config->base + IT51XXX_SHADBA1R);
-	sys_write8(((uint32_t)&chip_ctx) >> 16, config->base + IT51XXX_SHADBA2R);
+	sys_write8(((uint32_t)&sha_dlm) & 0xC0, base + IT51XXX_SHADBA0R);
+	sys_write8(((uint32_t)&sha_dlm) >> 8, base + IT51XXX_SHADBA1R);
+	sys_write8(((uint32_t)&sha_dlm) >> 16, base + IT51XXX_SHADBA2R);
 }
 
 static void it51xxx_sha256_module_calculation(const struct device *dev)
 {
 	const struct it51xxx_sha_config *config = dev->config;
+	const mm_reg_t base = mfd_ite_it51xxx_get_base(config->mfd);
 	struct it51xxx_sha_data *data = dev->data;
 
-	if (chip_ctx.sha_init) {
-		chip_ctx.sha_init = 0;
-		sys_write8(IT51XXX_SHAINI | IT51XXX_SHAEXE, config->base + IT51XXX_SHACR);
+	if (sha_dlm.sha_init) {
+		sha_dlm.sha_init = 0;
+		sys_write8(IT51XXX_SHAINI | IT51XXX_SHAEXE, base + IT51XXX_SHACR);
 	} else {
-		sys_write8(IT51XXX_SHAEXE, config->base + IT51XXX_SHACR);
+		sys_write8(IT51XXX_SHAEXE, base + IT51XXX_SHACR);
 	}
 
 	k_sem_take(&data->sha_done, K_FOREVER);
-
-	chip_ctx.w_input_index = 0;
+	sha_dlm.w_input_index = 0;
 }
 
 static int it51xxx_hash_handler(struct hash_ctx *ctx, struct hash_pkt *pkt, bool finish)
 {
 	const struct it51xxx_sha_config *config = ctx->device->config;
+	const mm_reg_t base = mfd_ite_it51xxx_get_base(config->mfd);
 	struct it51xxx_sha_data *data = ctx->device->data;
+	int ret;
 	uint32_t in_buf_idx = 0;
 	uint32_t rem_len = pkt->in_len;
+
+	ret = mfd_ite_it51xxx_lock(config->mfd, K_FOREVER);
+	if (ret) {
+		return ret;
+	}
+
+	if (data->sha_is_init) {
+		data->sha_is_init = false;
+		it51xxx_sha256_init(ctx->device);
+	}
 
 	/* data length >= 1KiB */
 	while (rem_len >= SHA_HW_MAX_INPUT_LEN) {
 		rem_len = rem_len - SHA_HW_MAX_INPUT_LEN;
 
-		memcpy(&chip_ctx.w_input[chip_ctx.w_input_index], &pkt->in_buf[in_buf_idx],
+		memcpy(&sha_dlm.w_input[sha_dlm.w_input_index], &pkt->in_buf[in_buf_idx],
 		       SHA_HW_MAX_INPUT_LEN);
-		chip_ctx.w_input_index += SHA_HW_MAX_INPUT_LEN;
+		sha_dlm.w_input_index += SHA_HW_MAX_INPUT_LEN;
 		in_buf_idx += SHA_HW_MAX_INPUT_LEN;
 
 		/* HW automatically load 1KB data from DLM */
-		sys_write8(IT51XXX_SHAEXEC_1K_BYTE, config->base + IT51XXX_SHAECR);
-		while (sys_read8(config->base + IT51XXX_SHASR) & IT51XXX_SHABUSY) {
+		sys_write8(IT51XXX_SHAEXEC_1K_BYTE, base + IT51XXX_SHAECR);
+		while (sys_read8(base + IT51XXX_SHASR) & IT51XXX_SHABUSY) {
 		};
 
 		it51xxx_sha256_module_calculation(ctx->device);
@@ -139,31 +125,30 @@ static int it51xxx_hash_handler(struct hash_ctx *ctx, struct hash_pkt *pkt, bool
 	/* 0 <= data length < 1KiB */
 	while (rem_len) {
 		rem_len--;
-		chip_ctx.w_input[chip_ctx.w_input_index++] = pkt->in_buf[in_buf_idx++];
+		sha_dlm.w_input[sha_dlm.w_input_index++] = pkt->in_buf[in_buf_idx++];
 
 		/*
 		 * If fill full 64 bytes then execute HW calculation.
 		 * If not, will execute in later finish block.
 		 */
-		if (chip_ctx.w_input_index >= SHA_SHA256_BLOCK_LEN) {
+		if (sha_dlm.w_input_index >= SHA_SHA256_BLOCK_LEN) {
 			/* HW automatically load 64 bytes data from DLM */
-			sys_write8(IT51XXX_SHAEXEC_64_BYTE, config->base + IT51XXX_SHAECR);
-			while (sys_read8(config->base + IT51XXX_SHASR) & IT51XXX_SHABUSY) {
+			sys_write8(IT51XXX_SHAEXEC_64_BYTE, base + IT51XXX_SHAECR);
+			while (sys_read8(base + IT51XXX_SHASR) & IT51XXX_SHABUSY) {
 			};
-
 			it51xxx_sha256_module_calculation(ctx->device);
 		}
 	}
 
-	chip_ctx.total_len += pkt->in_len;
+	sha_dlm.total_len += pkt->in_len;
 
 	if (finish) {
 		uint32_t *out_buf_ptr = (uint32_t *)pkt->out_buf;
 
 		/* Pre-processing (Padding) */
-		chip_ctx.w_input[chip_ctx.w_input_index++] = 0x80;
-		memset(&chip_ctx.w_input[chip_ctx.w_input_index], 0,
-		       SHA_SHA256_BLOCK_LEN - chip_ctx.w_input_index);
+		sha_dlm.w_input[sha_dlm.w_input_index++] = 0x80;
+		memset(&sha_dlm.w_input[sha_dlm.w_input_index], 0,
+		       SHA_SHA256_BLOCK_LEN - sha_dlm.w_input_index);
 
 		/*
 		 * Handles the boundary case of rest data:
@@ -172,16 +157,16 @@ static int it51xxx_hash_handler(struct hash_ctx *ctx, struct hash_pkt *pkt, bool
 		 * then fill 0 data and the last eight bytes bit length, and calculate
 		 * again.
 		 */
-		if (chip_ctx.w_input_index >= 56) {
+		if (sha_dlm.w_input_index >= 56) {
 			/* HW automatically load 64 bytes data from DLM */
-			sys_write8(IT51XXX_SHAEXEC_64_BYTE, config->base + IT51XXX_SHAECR);
-			while (sys_read8(config->base + IT51XXX_SHASR) & IT51XXX_SHABUSY) {
+			sys_write8(IT51XXX_SHAEXEC_64_BYTE, base + IT51XXX_SHAECR);
+			while (sys_read8(base + IT51XXX_SHASR) & IT51XXX_SHABUSY) {
 			};
 
 			it51xxx_sha256_module_calculation(ctx->device);
 
-			memset(&chip_ctx.w_input[chip_ctx.w_input_index], 0,
-			       SHA_SHA256_BLOCK_LEN - chip_ctx.w_input_index);
+			memset(&sha_dlm.w_input[sha_dlm.w_input_index], 0,
+			       SHA_SHA256_BLOCK_LEN - sha_dlm.w_input_index);
 		}
 
 		/*
@@ -189,35 +174,46 @@ static int it51xxx_hash_handler(struct hash_ctx *ctx, struct hash_pkt *pkt, bool
 		 * it51xxx memory (little-endian), so the bit length needs to
 		 * be transformed into big-endian format and then write to memory.
 		 */
-		chip_ctx.w_sha[15] = sys_cpu_to_be32(chip_ctx.total_len * 8);
+		sha_dlm.w_sha[15] = sys_cpu_to_be32(sha_dlm.total_len * 8);
 
 		/* HW automatically load 64 bytes data from DLM */
-		sys_write8(IT51XXX_SHAEXEC_64_BYTE, config->base + IT51XXX_SHAECR);
-		while (sys_read8(config->base + IT51XXX_SHASR) & IT51XXX_SHABUSY) {
+		sys_write8(IT51XXX_SHAEXEC_64_BYTE, base + IT51XXX_SHAECR);
+		while (sys_read8(base + IT51XXX_SHASR) & IT51XXX_SHABUSY) {
 		};
 
 		it51xxx_sha256_module_calculation(ctx->device);
 
 		/* HW write back the hash result to DLM */
 		/* Set DLM address for input data */
-		sys_write8(((uint32_t)&chip_ctx.h) & 0xC0, config->base + IT51XXX_SHADBA0R);
-		sys_write8(((uint32_t)&chip_ctx.h) >> 8, config->base + IT51XXX_SHADBA1R);
+		sys_write8(((uint32_t)&sha_dlm.h) & 0xC0, base + IT51XXX_SHADBA0R);
+		sys_write8(((uint32_t)&sha_dlm.h) >> 8, base + IT51XXX_SHADBA1R);
 
-		sys_write8(IT51XXX_SHAWB, config->base + IT51XXX_SHACR);
-
+		sys_write8(IT51XXX_SHAWB, base + IT51XXX_SHACR);
 		k_sem_take(&data->sha_done, K_FOREVER);
 
-		memcpy(out_buf_ptr, chip_ctx.h, sizeof(chip_ctx.h));
+		memcpy(out_buf_ptr, sha_dlm.h, sizeof(sha_dlm.h));
 
 		it51xxx_sha256_init(ctx->device);
 	}
+
+	mfd_ite_it51xxx_unlock(config->mfd);
 
 	return 0;
 }
 
 static int it51xxx_hash_session_free(const struct device *dev, struct hash_ctx *ctx)
 {
-	it51xxx_sha256_init(dev);
+	const struct it51xxx_sha_config *config = dev->config;
+	struct it51xxx_sha_data *data = dev->data;
+	int ret = mfd_ite_it51xxx_lock(config->mfd, K_FOREVER);
+
+	if (ret) {
+		return ret;
+	}
+
+	data->sha_is_init = true;
+
+	mfd_ite_it51xxx_unlock(config->mfd);
 
 	return 0;
 }
@@ -230,6 +226,10 @@ static inline int it51xxx_query_hw_caps(const struct device *dev)
 static int it51xxx_hash_begin_session(const struct device *dev, struct hash_ctx *ctx,
 				      enum hash_algo algo)
 {
+	const struct it51xxx_sha_config *config = dev->config;
+	struct it51xxx_sha_data *data = dev->data;
+	int ret;
+
 	if (algo != CRYPTO_HASH_ALGO_SHA256) {
 		LOG_ERR("Unsupported algorithm");
 		return -ENOTSUP;
@@ -240,47 +240,50 @@ static int it51xxx_hash_begin_session(const struct device *dev, struct hash_ctx 
 		return -ENOTSUP;
 	}
 
-	it51xxx_sha256_init(dev);
+	ret = mfd_ite_it51xxx_lock(config->mfd, K_FOREVER);
+	if (ret) {
+		return ret;
+	}
+
+	data->sha_is_init = true;
+
 	ctx->hash_hndlr = it51xxx_hash_handler;
 	ctx->device = dev;
+
+	mfd_ite_it51xxx_unlock(config->mfd);
 
 	return 0;
 }
 
-static void it51xxx_sha_isr(const struct device *dev)
+static void sha_complete(void *user_data, uint8_t status)
 {
-	const struct it51xxx_sha_config *config = dev->config;
-	struct it51xxx_sha_data *data = dev->data;
-	uint8_t sha_sts = sys_read8(config->base + IT51XXX_SHASR);
+	struct it51xxx_sha_data *data = user_data;
 
-	if (sha_sts & IT51XXX_SHAIS) {
-		if (sha_sts & IT51XXX_SHABUSY) {
-			LOG_WRN("sha completed but busy, sts %#x", sha_sts);
-		}
-
-		k_sem_give(&data->sha_done);
-		sys_write8(sha_sts | IT51XXX_SHAIS, config->base + IT51XXX_SHASR);
+	if (status & IT51XXX_SHABUSY) {
+		LOG_WRN("sha completed but busy, sts %#x", status);
 	}
+
+	k_sem_give(&data->sha_done);
 }
 
 static int it51xxx_sha_init(const struct device *dev)
 {
 	const struct it51xxx_sha_config *config = dev->config;
+	const mm_reg_t base = mfd_ite_it51xxx_get_base(config->mfd);
 	struct it51xxx_sha_data *data = dev->data;
 
-	it51xxx_sha256_init(dev);
+	data->sha_is_init = true;
 
 	k_sem_init(&data->sha_done, 0, 1);
 
 	/* Select SHA-2 Family, SHA-256 */
-	sys_write8(IT51XXX_SHA256, config->base + IT51XXX_SHASETR);
+	sys_write8(IT51XXX_SHA256, base + IT51XXX_SHASETR);
 
 	/* Enable SHA interrupt */
-	sys_write8(sys_read8(config->base + IT51XXX_SHASR) | IT51XXX_SHAIE,
-		   config->base + IT51XXX_SHASR);
+	sys_write8(sys_read8(base + IT51XXX_SHASR) | IT51XXX_SHAIE, base + IT51XXX_SHASR);
 
-	IRQ_CONNECT(DT_INST_IRQN(0), 0, it51xxx_sha_isr, DEVICE_DT_INST_GET(0), 0);
-	irq_enable(DT_INST_IRQN(0));
+	/* TODO: think about shared_irq */
+	it51xxx_hwcrypto_register_sha_cb(config->mfd, sha_complete, data);
 
 	return 0;
 }
@@ -292,7 +295,7 @@ static DEVICE_API(crypto, it51xxx_crypto_api) = {
 };
 
 static const struct it51xxx_sha_config it51xxx_sha_config_0 = {
-	.base = DT_INST_REG_ADDR(0),
+	.mfd = DEVICE_DT_GET(DT_INST_PARENT(0)),
 };
 
 static struct it51xxx_sha_data it51xxx_sha_data_0 = {};
