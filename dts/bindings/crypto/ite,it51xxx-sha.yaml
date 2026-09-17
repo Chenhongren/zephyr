@@ -7,6 +7,3 @@ compatible: "ite,it51xxx-sha"
 
 include: base.yaml
 
-properties:
-  reg:
-    required: true
