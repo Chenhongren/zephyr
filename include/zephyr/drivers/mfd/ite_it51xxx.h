@@ -40,6 +40,9 @@ extern "C" {
 #define SHA_HW_MAX_INPUT_LEN       1024
 #define SHA_HW_MAX_INPUT_LEN_WORDS (SHA_HW_MAX_INPUT_LEN / sizeof(uint32_t))
 
+#define IT51XXX_HWCRYPTO_RSA_MIN_BYTE_LEN 64  /* 64 bytes (512 bits) */
+#define IT51XXX_HWCRYPTO_RSA_MAX_BYTE_LEN 512 /* 512 bytes (4096 bits) */
+
 /*
  * This struct is used by the hardware and must be stored in RAM first 4k-byte
  * and aligned on a 256-byte boundary.
@@ -57,12 +60,22 @@ struct it51xxx_sha_dlm {
 	uint32_t total_len;
 } __aligned(256);
 
+struct it51xxx_rsa_dlm {
+	uint8_t key_public[IT51XXX_HWCRYPTO_RSA_MAX_BYTE_LEN];  /* 000h – 1FFh */
+	uint8_t reserved_1[512];                                /* 200h - 3FFh */
+	uint8_t messages[IT51XXX_HWCRYPTO_RSA_MAX_BYTE_LEN];    /* 400h – 5FFh */
+	uint8_t reserved_2[1024];                               /* 600h - 9FFh */
+	uint8_t key_private[IT51XXX_HWCRYPTO_RSA_MAX_BYTE_LEN]; /* A00h – BFFh */
+	uint8_t reserved_3[1024];                               /* C00h - FFFh */
+};
+
 /* The it51xxx hardware crypto engines, including SHA, RSA...etc,
  * share the same 4 KB DLM memory region. The union ensures that
  * each engine uses the same underlying memory.
  */
 union hwcrypto_dlm_block {
 	struct it51xxx_sha_dlm sha;
+	struct it51xxx_rsa_dlm rsa;
 	uint8_t raw_data[IT51XXX_HWCRYPTO_DLM_SIZE];
 };
 
