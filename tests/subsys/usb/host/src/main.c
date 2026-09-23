@@ -353,14 +353,6 @@ void usbh_test_shutdown(void *f)
 {
 	int ret;
 
-	ret = usbd_disable(test_usbd);
-	zassert_ok(ret, "Failed to disable device support");
-
-	ret = usbd_shutdown(test_usbd);
-	zassert_ok(ret, "Failed to shutdown device support");
-
-	LOG_INF("Device support disabled");
-
 	ret = usbh_disable(uhs_ctx);
 	zassert_ok(ret, "Failed to disable USB host");
 
@@ -368,6 +360,14 @@ void usbh_test_shutdown(void *f)
 	zassert_ok(ret, "Failed to shutdown host support");
 
 	LOG_INF("Host controller disabled");
+
+	ret = usbd_disable(test_usbd);
+	zassert_ok(ret, "Failed to disable device support");
+
+	ret = usbd_shutdown(test_usbd);
+	zassert_ok(ret, "Failed to shutdown device support");
+
+	LOG_INF("Device support disabled");
 }
 
 ZTEST_SUITE(usbh_test, NULL, usbh_test_enable, NULL, NULL, usbh_test_shutdown);
