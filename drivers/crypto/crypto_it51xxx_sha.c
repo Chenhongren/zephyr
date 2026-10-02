@@ -54,6 +54,20 @@ struct it51xxx_sha_data {
 	bool sha_is_init;
 };
 
+static void debug_print(const struct device *dev)
+{
+	printk("chip_ctx:\n");
+	for (size_t i = 0; i < sizeof(chip_ctx); i++) {
+		printk("%02x ", (uint8_t)hwcrypto_dlm.raw_data[i]);
+
+		if ((i + 1U) % 16U == 0U) {
+			printk("\n");
+			k_msleep(100);
+		}
+	}
+	printk("\n");
+}
+
 static void it51xxx_sha256_init(const struct device *dev)
 {
 	const struct it51xxx_sha_config *config = dev->config;
@@ -62,6 +76,8 @@ static void it51xxx_sha256_init(const struct device *dev)
 	chip_ctx.sha_init = IT51XXX_SHA_INIT;
 	chip_ctx.total_len = 0;
 	chip_ctx.w_input_index = 0;
+
+	// debug_print(dev);
 
 	/* Set DLM address for input data */
 	sys_write8(((uint32_t)&chip_ctx) & 0xC0, base + IT51XXX_SHADBA0R);
@@ -94,12 +110,14 @@ static int it51xxx_hash_handler(struct hash_ctx *ctx, struct hash_pkt *pkt, bool
 	uint32_t in_buf_idx = 0;
 	uint32_t rem_len = pkt->in_len;
 
+	LOG_ERR("ite debug pkt data %d", pkt->in_len);
+
 	(void)mfd_ite_it51xxx_lock(config->mfd, K_FOREVER);
 
-	if (data->sha_is_init) {
-		data->sha_is_init = false;
+	// if (data->sha_is_init) {
+	// 	data->sha_is_init = false;
 		it51xxx_sha256_init(ctx->device);
-	}
+	// }
 
 	/* data length >= 1KiB */
 	while (rem_len >= SHA_HW_MAX_INPUT_LEN) {
