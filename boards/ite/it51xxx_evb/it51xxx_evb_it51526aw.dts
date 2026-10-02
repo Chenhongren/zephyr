@@ -142,6 +142,10 @@
 	status = "okay";
 };
 
+&hw_rsa {
+	status = "okay";
+};
+
 /* voltage comparator for test */
 &vcmp1 {
 	status = "okay";
