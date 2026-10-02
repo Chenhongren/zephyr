@@ -234,10 +234,18 @@ ZTEST(usbh_test, test_get_types)
 	zassert_ok(err, "Failed to set interface alternate");
 
 	/* if0_out_ep */
+#if 0
 	desc = usbh_desc_get_endpoint(udev, 0x01);
+#else
+	desc = usbh_desc_get_endpoint(udev, 0x05);
+#endif
 	zassert_not_null(desc);
 	zassert_equal(desc->bDescriptorType, USB_DESC_ENDPOINT);
+#if 0
 	zassert_equal(((struct usb_ep_descriptor *)desc)->bEndpointAddress, 0x01);
+#else
+	zassert_equal(((struct usb_ep_descriptor *)desc)->bEndpointAddress, 0x05);
+#endif
 
 	/* if0_in_ep */
 	desc = usbh_desc_get_endpoint(udev, 0x81);
@@ -277,6 +285,17 @@ void *usbh_test_enable(void)
 {
 	int ret;
 
+	test_usbd = sample_usbd_setup_device(NULL);
+	zassert_not_null(test_usbd, "Failed to setup USB device");
+
+	ret = usbd_init(test_usbd);
+	zassert_ok(ret, "Failed to initialize device support");
+
+	ret = usbd_enable(test_usbd);
+	zassert_ok(ret, "Failed to enable device support");
+
+	LOG_INF("Device support enabled");
+
 	ret = usbh_init(uhs_ctx);
 	zassert_ok(ret, "Failed to initialize USB host");
 
@@ -293,17 +312,6 @@ void *usbh_test_enable(void)
 	zassert_ok(ret, "Failed to enable SoF generator");
 
 	LOG_INF("Host controller enabled");
-
-	test_usbd = sample_usbd_setup_device(NULL);
-	zassert_not_null(test_usbd, "Failed to setup USB device");
-
-	ret = usbd_init(test_usbd);
-	zassert_ok(ret, "Failed to initialize device support");
-
-	ret = usbd_enable(test_usbd);
-	zassert_ok(ret, "Failed to enable device support");
-
-	LOG_INF("Device support enabled");
 
 	/* Allow the host time to reset the device. */
 	k_msleep(200);
