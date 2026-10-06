@@ -1,0 +1,35 @@
+# Copyright (c) 2026 ITE Corporation.
+# SPDX-License-Identifier: Apache-2.0
+
+module = PSA_CRYPTO_IT51XXX
+module-str = psa-crypto-it51xxx
+source "subsys/logging/Kconfig.template.log_config"
+
+config PSA_CRYPTO_DRIVER_ITE_IT51XXX
+	bool "Build psa_crypto_driver for it51xxx"
+	depends on MBEDTLS_PSA_CRYPTO_C
+	select SOC_IT51XXX_HW_CRYPTO_ACCELERATE
+	default y if DT_HAS_ITE_IT51XXX_CRYPTO_ENABLED
+	help
+	  This option enables hardware-accelerated PSA crypto operations
+	  on it51xxx SoCs. Operations not supported by the hardware
+	  driver fall back to software.
+
+if PSA_CRYPTO_DRIVER_ITE_IT51XXX
+
+config PSA_CRYPTO_DRIVER_ITE_IT51XXX_RSA
+	bool "Enable it51xxx rsa driver"
+	select SOC_IT51XXX_CPU_IDLE_GATING
+	default y if DT_HAS_ITE_IT51XXX_PSA_RSA_ENABLED
+	help
+	  This option enables the it51xxx hardware RSA driver for
+	  PSA crypto. The driver supports RSA PKCS#1 v1.5 signature
+	  generation and verification.
+
+configdefault TF_PSA_CRYPTO_DRIVER_CONFIG_FILE
+	default "ite-crypto-config.h"
+
+configdefault TF_PSA_CRYPTO_DISPATCH_DIR
+	default "$(ZEPHYR_HAL_ITE_MODULE_DIR)/psa_crypto_drivers/dispatch"
+
+endif # PSA_CRYPTO_DRIVER_ITE_IT51XXX

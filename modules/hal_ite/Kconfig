@@ -1,0 +1,4 @@
+# Copyright (c) 2026 ITE Corporation.
+# SPDX-License-Identifier: Apache-2.0
+
+rsource "Kconfig.psa_crypto_driver"

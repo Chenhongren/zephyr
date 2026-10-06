@@ -1,0 +1,9 @@
+# Copyright (c) 2026 ITE Corporation. All Rights Reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+description: ITE IT51XXX PSA Crypto RSA accelerator
+
+compatible: "ite,it51xxx-psa-rsa"
+
+include: [base.yaml]
+

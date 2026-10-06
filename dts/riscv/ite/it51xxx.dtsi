@@ -1421,6 +1421,19 @@
 			status = "disabled";
 		};
 
+		psa_crypto: hwcrypto@f03b00 {
+			compatible = "ite,it51xxx-crypto";
+			reg = <0xf03b00 0x00aa>;
+			interrupts = <IT51XXX_IRQ_CRYPTO IRQ_TYPE_LEVEL_HIGH>;
+			interrupt-parent = <&intc>;
+			status = "disabled";
+
+			rsa: rsa {
+				compatible = "ite,it51xxx-psa-rsa";
+				status = "disabled";
+			};
+		};
+
 		spi0: spi@f02600 {
 			#address-cells = <1>;
 			#size-cells = <0>;
