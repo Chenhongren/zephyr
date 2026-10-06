@@ -23,6 +23,8 @@ manifest:
       url-base: https://github.com/zephyrproject-rtos
     - name: babblesim
       url-base: https://github.com/BabbleSim
+    - name: rengithub
+      url-base: https://github.com/Chenhongren
 
   group-filter: [-babblesim, -optional, -testing]
 
@@ -195,6 +197,12 @@ manifest:
     - name: hal_intel
       revision: 884c7a79a48efef50bc0d12c86f5d0951748f24d
       path: modules/hal/intel
+      groups:
+        - hal
+    - name: hal_ite
+      remote: rengithub
+      revision: 83c57e646b1af22b0f2be0f21c3a8508b4ae0d9a
+      path: modules/hal/ite
       groups:
         - hal
     - name: hal_microchip

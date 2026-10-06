@@ -36,4 +36,7 @@ config GEN_SW_ISR_TABLE
 config RISCV_SOC_INTERRUPT_INIT
 	default y
 
+configdefault TF_PSA_CRYPTO_DISPATCH_DIR
+	  default "$(ZEPHYR_HAL_ITE_MODULE_DIR)/ite_psa_crypto_drivers/dispatch"
+
 endif # SOC_SERIES_IT51XXX
