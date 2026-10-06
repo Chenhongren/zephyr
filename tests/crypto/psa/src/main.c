@@ -176,8 +176,8 @@ ZTEST_USER(psa_crypto_test_suite, test_aes_ecb)
 	status = psa_import_key(&key_attr, key, sizeof(key), &key_id);
 	zassert_equal(status, PSA_SUCCESS);
 
-	status = psa_cipher_encrypt(key_id, PSA_ALG_ECB_NO_PADDING, in_buf, sizeof(in_buf),
-				    out_buf, sizeof(out_buf), &out_len);
+	status = psa_cipher_encrypt(key_id, PSA_ALG_ECB_NO_PADDING, in_buf, sizeof(in_buf), out_buf,
+				    sizeof(out_buf), &out_len);
 	zassert_equal(status, PSA_SUCCESS);
 
 	zassert_mem_equal(out_buf, out_buf_ref, sizeof(out_buf_ref));
@@ -185,5 +185,554 @@ ZTEST_USER(psa_crypto_test_suite, test_aes_ecb)
 	status = psa_destroy_key(key_id);
 	zassert_equal(status, PSA_SUCCESS);
 }
+
+#include "rsa_2048.h"
+#include "rsa_4096.h"
+
+#include <stdio.h>
+#include <psa/crypto.h>
+#include <zephyr/ztest.h>
+
+#define SIGN_ALG PSA_ALG_RSA_PKCS1V15_SIGN(PSA_ALG_SHA_256)
+
+__maybe_unused static void print_hex(const char *label, const uint8_t *data, size_t length)
+{
+	printf("%s (%zu bytes):\n", label, length);
+
+	for (size_t i = 0; i < length; i++) {
+		printf("%02X ", (unsigned int)data[i]);
+
+		if ((i + 1) % 16 == 0) {
+			printf("\n");
+		}
+	}
+
+	if (length % 16 != 0) {
+		printf("\n");
+	}
+}
+
+ZTEST_USER(psa_crypto_test_suite, test_rsa_2048)
+{
+	psa_status_t status;
+	psa_key_id_t private_key_id = 0;
+	psa_key_id_t public_key_id = 0;
+	psa_key_attributes_t attributes = PSA_KEY_ATTRIBUTES_INIT;
+	const uint8_t message[] = "Hello RSA";
+	uint8_t received_data[sizeof(message) - 1];
+	uint8_t hash[PSA_HASH_LENGTH(PSA_ALG_SHA_256)];
+	uint8_t signature[PSA_SIGN_OUTPUT_SIZE(PSA_KEY_TYPE_RSA_KEY_PAIR, RSA_BITS_2048, SIGN_ALG)];
+	size_t hash_length = 0;
+	size_t signature_length = 0;
+
+	status = psa_crypto_init();
+	if (status != PSA_SUCCESS) {
+		printf("<error> failed to initialize PSA Crypto: %ld\n", (long)status);
+		goto cleanup;
+	}
+
+	/* Import the private key instead of generating a key pair */
+	psa_set_key_type(&attributes, PSA_KEY_TYPE_RSA_KEY_PAIR);
+	psa_set_key_bits(&attributes, RSA_BITS_2048);
+	psa_set_key_usage_flags(&attributes, PSA_KEY_USAGE_SIGN_HASH);
+	psa_set_key_algorithm(&attributes, SIGN_ALG);
+	status = psa_import_key(&attributes, private_key_der, sizeof(private_key_der),
+				&private_key_id);
+	psa_reset_key_attributes(&attributes);
+	if (status != PSA_SUCCESS) {
+		printf("<error> failed to import private key: %ld\n", (long)status);
+		goto cleanup;
+	}
+
+	/* Import a separate public key for verification */
+	psa_set_key_type(&attributes, PSA_KEY_TYPE_RSA_PUBLIC_KEY);
+	psa_set_key_bits(&attributes, RSA_BITS_2048);
+	psa_set_key_usage_flags(&attributes, PSA_KEY_USAGE_VERIFY_HASH);
+	psa_set_key_algorithm(&attributes, SIGN_ALG);
+	status =
+		psa_import_key(&attributes, public_key_der, sizeof(public_key_der), &public_key_id);
+	psa_reset_key_attributes(&attributes);
+	if (status != PSA_SUCCESS) {
+		printf("<error> failed to import public key: %ld\n", (long)status);
+		goto cleanup;
+	}
+
+#if 0
+	print_hex("Message", message, sizeof(message));
+#endif
+
+	/* Hash the original message, excluding the terminating '\0' */
+	status = psa_hash_compute(PSA_ALG_SHA_256, message, sizeof(message) - 1, hash, sizeof(hash),
+				  &hash_length);
+	if (status != PSA_SUCCESS) {
+		printf("<error> failed to hash original message: %ld\n", (long)status);
+		goto cleanup;
+	}
+
+#if 0
+	print_hex("Hash(SHA256)", hash, hash_length);
+#endif
+
+	/* Sign using the imported private key */
+	status = psa_sign_hash(private_key_id, SIGN_ALG, hash, hash_length, signature,
+			       sizeof(signature), &signature_length);
+	if (status != PSA_SUCCESS) {
+		printf("<error> failed to sign hash: %ld\n", (long)status);
+		goto cleanup;
+	}
+
+#if 0
+	print_hex("Signature", signature, signature_length);
+#endif
+
+	/* Simulate receiving the message and independently hash it */
+	memcpy(received_data, message, sizeof(received_data));
+	status = psa_hash_compute(PSA_ALG_SHA_256, received_data, sizeof(received_data), hash,
+				  sizeof(hash), &hash_length);
+	if (status != PSA_SUCCESS) {
+		printf("<error> failed to hash received data: %ld\n", (long)status);
+		goto cleanup;
+	}
+
+	/* Verify using the independently imported public key */
+	status = psa_verify_hash(public_key_id, SIGN_ALG, hash, hash_length, signature,
+				 signature_length);
+	if (status != PSA_SUCCESS) {
+		printf("<error> failed to verify received data: %ld\n", (long)status);
+		goto cleanup;
+	}
+	printf("<info> RSA sign/verify OK, signature: %zu bytes\n", signature_length);
+
+	/* Modified data must fail verification */
+	received_data[0] ^= 0x01;
+	status = psa_hash_compute(PSA_ALG_SHA_256, received_data, sizeof(received_data), hash,
+				  sizeof(hash), &hash_length);
+	if (status != PSA_SUCCESS) {
+		printf("<error> failed to hash modified data: %ld\n", (long)status);
+		goto cleanup;
+	}
+	status = psa_verify_hash(public_key_id, SIGN_ALG, hash, hash_length, signature,
+				 signature_length);
+	if (status != PSA_ERROR_INVALID_SIGNATURE) {
+		printf("<error> expected invalid signature, got: %ld\n", (long)status);
+		if (status == PSA_SUCCESS) {
+			status = PSA_ERROR_GENERIC_ERROR;
+		}
+		goto cleanup;
+	}
+	printf("<info> modified data rejected as expected\n");
+	status = PSA_SUCCESS;
+
+cleanup:
+	psa_reset_key_attributes(&attributes);
+	if (public_key_id != 0) {
+		psa_status_t destroy_status = psa_destroy_key(public_key_id);
+		if (status == PSA_SUCCESS) {
+			status = destroy_status;
+		}
+	}
+	if (private_key_id != 0) {
+		psa_status_t destroy_status = psa_destroy_key(private_key_id);
+		if (status == PSA_SUCCESS) {
+			status = destroy_status;
+		}
+	}
+	zassert_equal(status, PSA_SUCCESS, "RSA test failed: %ld", (long)status);
+}
+
+#if 0
+ZTEST_USER(psa_crypto_test_suite, test_rsa_2048_gen_key)
+{
+	psa_status_t status;
+	psa_key_id_t key = 0;
+	psa_key_attributes_t attributes = PSA_KEY_ATTRIBUTES_INIT;
+
+	const uint8_t message[] = "Hello RSA";
+	uint8_t hash[PSA_HASH_LENGTH(PSA_ALG_SHA_256)];
+	uint8_t signature[PSA_SIGN_OUTPUT_SIZE(
+		PSA_KEY_TYPE_RSA_KEY_PAIR, RSA_BITS_2048, SIGN_ALG)];
+
+	/* Static buffers reduce test thread stack usage */
+	static uint8_t public_key[PSA_EXPORT_KEY_OUTPUT_SIZE(
+		PSA_KEY_TYPE_RSA_PUBLIC_KEY, RSA_BITS_2048)];
+	static uint8_t private_key[PSA_EXPORT_KEY_OUTPUT_SIZE(
+		PSA_KEY_TYPE_RSA_KEY_PAIR, RSA_BITS_2048)];
+
+	size_t hash_length = 0;
+	size_t signature_length = 0;
+	size_t public_key_length = 0;
+	size_t private_key_length = 0;
+
+	status = psa_crypto_init();
+	if (status != PSA_SUCCESS) {
+		printf("<error> failed to init PSA Crypto: %ld\n",
+		       (long)status);
+		goto cleanup;
+	}
+
+	printf("<info> generate RSA key pair...\n");
+	psa_set_key_type(&attributes, PSA_KEY_TYPE_RSA_KEY_PAIR);
+	psa_set_key_bits(&attributes, RSA_BITS_2048);
+	psa_set_key_usage_flags(&attributes,
+			       PSA_KEY_USAGE_SIGN_HASH |
+			       PSA_KEY_USAGE_VERIFY_HASH |
+			       PSA_KEY_USAGE_EXPORT);
+	psa_set_key_algorithm(&attributes, SIGN_ALG);
+
+	status = psa_generate_key(&attributes, &key);
+	psa_reset_key_attributes(&attributes);
+	if (status != PSA_SUCCESS) {
+		printf("<error> failed to generate key: %ld\n",
+		       (long)status);
+		goto cleanup;
+	}
+
+	/* Export and print the public key */
+	status = psa_export_public_key(key,
+				       public_key, sizeof(public_key),
+				       &public_key_length);
+	if (status != PSA_SUCCESS) {
+		printf("<error> failed to export public key: %ld\n",
+		       (long)status);
+		goto cleanup;
+	}
+
+	print_hex("RSA public key (DER)", public_key, public_key_length);
+
+	/* Export and print the private key */
+	status = psa_export_key(key,
+				private_key, sizeof(private_key),
+				&private_key_length);
+	if (status != PSA_SUCCESS) {
+		printf("<error> failed to export private key: %ld\n",
+		       (long)status);
+		goto cleanup;
+	}
+
+	print_hex("RSA private key (DER)", private_key, private_key_length);
+
+	/* Calculate the message hash, excluding the terminating '\0' */
+	printf("<info> compute SHA-256 hash...\n");
+	status = psa_hash_compute(PSA_ALG_SHA_256,
+				  message, sizeof(message) - 1,
+				  hash, sizeof(hash), &hash_length);
+	if (status != PSA_SUCCESS) {
+		printf("<error> failed to compute hash: %ld\n",
+		       (long)status);
+		goto cleanup;
+	}
+
+	printf("<info> sign using the private key...\n");
+	status = psa_sign_hash(key, SIGN_ALG,
+			       hash, hash_length,
+			       signature, sizeof(signature),
+			       &signature_length);
+	if (status != PSA_SUCCESS) {
+		printf("<error> failed to sign hash: %ld\n",
+		       (long)status);
+		goto cleanup;
+	}
+
+	printf("<info> verify using the public key...\n");
+	status = psa_verify_hash(key, SIGN_ALG,
+				 hash, hash_length,
+				 signature, signature_length);
+	if (status != PSA_SUCCESS) {
+		printf("<error> failed to verify hash: %ld\n",
+		       (long)status);
+		goto cleanup;
+	}
+
+	printf("RSA sign/verify OK, signature: %zu bytes\n",
+	       signature_length);
+
+cleanup:
+	/* Clear the exported private key from memory */
+	{
+		volatile uint8_t *p = private_key;
+
+		for (size_t i = 0; i < sizeof(private_key); i++) {
+			p[i] = 0;
+		}
+	}
+
+	psa_reset_key_attributes(&attributes);
+
+	if (key != 0) {
+		psa_status_t destroy_status = psa_destroy_key(key);
+
+		if (status == PSA_SUCCESS) {
+			status = destroy_status;
+		}
+	}
+
+	if (status != PSA_SUCCESS) {
+		printf("PSA error: %ld\n", (long)status);
+	}
+
+	zassert_equal(status, PSA_SUCCESS);
+}
+#endif
+
+ZTEST_USER(psa_crypto_test_suite, test_rsa_4096)
+{
+	psa_status_t status;
+	psa_key_id_t private_key_id = 0;
+	psa_key_id_t public_key_id = 0;
+	psa_key_attributes_t attributes = PSA_KEY_ATTRIBUTES_INIT;
+	const uint8_t message[] = "Hello RSA";
+	uint8_t received_data[sizeof(message) - 1];
+	uint8_t hash[PSA_HASH_LENGTH(PSA_ALG_SHA_256)];
+	uint8_t signature[PSA_SIGN_OUTPUT_SIZE(PSA_KEY_TYPE_RSA_KEY_PAIR, RSA_BITS_4096, SIGN_ALG)];
+	size_t hash_length = 0;
+	size_t signature_length = 0;
+
+	status = psa_crypto_init();
+	if (status != PSA_SUCCESS) {
+		printf("<error> failed to initialize PSA Crypto: %ld\n", (long)status);
+		goto cleanup;
+	}
+
+	/* Import the private key instead of generating a key pair */
+	psa_set_key_type(&attributes, PSA_KEY_TYPE_RSA_KEY_PAIR);
+	psa_set_key_bits(&attributes, RSA_BITS_4096);
+	psa_set_key_usage_flags(&attributes, PSA_KEY_USAGE_SIGN_HASH);
+	psa_set_key_algorithm(&attributes, SIGN_ALG);
+	status = psa_import_key(&attributes, rsa4096_private_key_der,
+				sizeof(rsa4096_private_key_der), &private_key_id);
+	psa_reset_key_attributes(&attributes);
+	if (status != PSA_SUCCESS) {
+		printf("<error> failed to import private key: %ld\n", (long)status);
+		goto cleanup;
+	}
+
+	/* Import a separate public key for verification */
+	psa_set_key_type(&attributes, PSA_KEY_TYPE_RSA_PUBLIC_KEY);
+	psa_set_key_bits(&attributes, RSA_BITS_4096);
+	psa_set_key_usage_flags(&attributes, PSA_KEY_USAGE_VERIFY_HASH);
+	psa_set_key_algorithm(&attributes, SIGN_ALG);
+	status = psa_import_key(&attributes, rsa4096_public_key_der, sizeof(rsa4096_public_key_der),
+				&public_key_id);
+	psa_reset_key_attributes(&attributes);
+	if (status != PSA_SUCCESS) {
+		printf("<error> failed to import public key: %ld\n", (long)status);
+		goto cleanup;
+	}
+
+#if 0
+	print_hex("Message", message, sizeof(message));
+#endif
+
+	/* Hash the original message, excluding the terminating '\0' */
+	status = psa_hash_compute(PSA_ALG_SHA_256, message, sizeof(message) - 1, hash, sizeof(hash),
+				  &hash_length);
+	if (status != PSA_SUCCESS) {
+		printf("<error> failed to hash original message: %ld\n", (long)status);
+		goto cleanup;
+	}
+
+#if 0
+	print_hex("Hash(SHA256)", hash, hash_length);
+#endif
+
+	/* Sign using the imported private key */
+	status = psa_sign_hash(private_key_id, SIGN_ALG, hash, hash_length, signature,
+			       sizeof(signature), &signature_length);
+	if (status != PSA_SUCCESS) {
+		printf("<error> failed to sign hash: %ld\n", (long)status);
+		goto cleanup;
+	}
+
+#if 0
+	print_hex("Signature", signature, signature_length);
+#endif
+
+	/* Simulate receiving the message and independently hash it */
+	memcpy(received_data, message, sizeof(received_data));
+	status = psa_hash_compute(PSA_ALG_SHA_256, received_data, sizeof(received_data), hash,
+				  sizeof(hash), &hash_length);
+	if (status != PSA_SUCCESS) {
+		printf("<error> failed to hash received data: %ld\n", (long)status);
+		goto cleanup;
+	}
+
+	/* Verify using the independently imported public key */
+	status = psa_verify_hash(public_key_id, SIGN_ALG, hash, hash_length, signature,
+				 signature_length);
+	if (status != PSA_SUCCESS) {
+		printf("<error> failed to verify received data: %ld\n", (long)status);
+		goto cleanup;
+	}
+	printf("<info> RSA sign/verify OK, signature: %zu bytes\n", signature_length);
+
+	/* Modified data must fail verification */
+	received_data[0] ^= 0x01;
+	status = psa_hash_compute(PSA_ALG_SHA_256, received_data, sizeof(received_data), hash,
+				  sizeof(hash), &hash_length);
+	if (status != PSA_SUCCESS) {
+		printf("<error> failed to hash modified data: %ld\n", (long)status);
+		goto cleanup;
+	}
+	status = psa_verify_hash(public_key_id, SIGN_ALG, hash, hash_length, signature,
+				 signature_length);
+	if (status != PSA_ERROR_INVALID_SIGNATURE) {
+		printf("<error> expected invalid signature, got: %ld\n", (long)status);
+		if (status == PSA_SUCCESS) {
+			status = PSA_ERROR_GENERIC_ERROR;
+		}
+		goto cleanup;
+	}
+	printf("<info> modified data rejected as expected\n");
+	status = PSA_SUCCESS;
+
+cleanup:
+	psa_reset_key_attributes(&attributes);
+	if (public_key_id != 0) {
+		psa_status_t destroy_status = psa_destroy_key(public_key_id);
+		if (status == PSA_SUCCESS) {
+			status = destroy_status;
+		}
+	}
+	if (private_key_id != 0) {
+		psa_status_t destroy_status = psa_destroy_key(private_key_id);
+		if (status == PSA_SUCCESS) {
+			status = destroy_status;
+		}
+	}
+	zassert_equal(status, PSA_SUCCESS, "RSA test failed: %ld", (long)status);
+}
+#if 0
+ZTEST_USER(psa_crypto_test_suite, test_rsa_4096_gen_key)
+{
+	psa_status_t status;
+	psa_key_id_t key = 0;
+	psa_key_attributes_t attributes = PSA_KEY_ATTRIBUTES_INIT;
+
+	const uint8_t message[] = "Hello RSA";
+	uint8_t hash[PSA_HASH_LENGTH(PSA_ALG_SHA_256)];
+	uint8_t signature[PSA_SIGN_OUTPUT_SIZE(
+		PSA_KEY_TYPE_RSA_KEY_PAIR, RSA_BITS_4096, SIGN_ALG)];
+
+	/* Static buffers reduce test thread stack usage */
+	static uint8_t public_key[PSA_EXPORT_KEY_OUTPUT_SIZE(
+		PSA_KEY_TYPE_RSA_PUBLIC_KEY, RSA_BITS_4096)];
+	static uint8_t private_key[PSA_EXPORT_KEY_OUTPUT_SIZE(
+		PSA_KEY_TYPE_RSA_KEY_PAIR, RSA_BITS_4096)];
+
+	size_t hash_length = 0;
+	size_t signature_length = 0;
+	size_t public_key_length = 0;
+	size_t private_key_length = 0;
+
+	status = psa_crypto_init();
+	if (status != PSA_SUCCESS) {
+		printf("<error> failed to init PSA Crypto: %ld\n",
+		       (long)status);
+		goto cleanup;
+	}
+
+	printf("<info> generate RSA key pair...\n");
+	psa_set_key_type(&attributes, PSA_KEY_TYPE_RSA_KEY_PAIR);
+	psa_set_key_bits(&attributes, RSA_BITS_4096);
+	psa_set_key_usage_flags(&attributes,
+			       PSA_KEY_USAGE_SIGN_HASH |
+			       PSA_KEY_USAGE_VERIFY_HASH |
+			       PSA_KEY_USAGE_EXPORT);
+	psa_set_key_algorithm(&attributes, SIGN_ALG);
+
+	status = psa_generate_key(&attributes, &key);
+	psa_reset_key_attributes(&attributes);
+	if (status != PSA_SUCCESS) {
+		printf("<error> failed to generate key: %ld\n",
+		       (long)status);
+		goto cleanup;
+	}
+
+	/* Export and print the public key */
+	status = psa_export_public_key(key,
+				       public_key, sizeof(public_key),
+				       &public_key_length);
+	if (status != PSA_SUCCESS) {
+		printf("<error> failed to export public key: %ld\n",
+		       (long)status);
+		goto cleanup;
+	}
+
+	print_hex("RSA public key (DER)", public_key, public_key_length);
+
+	/* Export and print the private key */
+	status = psa_export_key(key,
+				private_key, sizeof(private_key),
+				&private_key_length);
+	if (status != PSA_SUCCESS) {
+		printf("<error> failed to export private key: %ld\n",
+		       (long)status);
+		goto cleanup;
+	}
+
+	print_hex("RSA private key (DER)", private_key, private_key_length);
+
+	/* Calculate the message hash, excluding the terminating '\0' */
+	printf("<info> compute SHA-256 hash...\n");
+	status = psa_hash_compute(PSA_ALG_SHA_256,
+				  message, sizeof(message) - 1,
+				  hash, sizeof(hash), &hash_length);
+	if (status != PSA_SUCCESS) {
+		printf("<error> failed to compute hash: %ld\n",
+		       (long)status);
+		goto cleanup;
+	}
+
+	printf("<info> sign using the private key...\n");
+	status = psa_sign_hash(key, SIGN_ALG,
+			       hash, hash_length,
+			       signature, sizeof(signature),
+			       &signature_length);
+	if (status != PSA_SUCCESS) {
+		printf("<error> failed to sign hash: %ld\n",
+		       (long)status);
+		goto cleanup;
+	}
+
+	printf("<info> verify using the public key...\n");
+	status = psa_verify_hash(key, SIGN_ALG,
+				 hash, hash_length,
+				 signature, signature_length);
+	if (status != PSA_SUCCESS) {
+		printf("<error> failed to verify hash: %ld\n",
+		       (long)status);
+		goto cleanup;
+	}
+
+	printf("RSA sign/verify OK, signature: %zu bytes\n",
+	       signature_length);
+
+cleanup:
+	/* Clear the exported private key from memory */
+	{
+		volatile uint8_t *p = private_key;
+
+		for (size_t i = 0; i < sizeof(private_key); i++) {
+			p[i] = 0;
+		}
+	}
+
+	psa_reset_key_attributes(&attributes);
+
+	if (key != 0) {
+		psa_status_t destroy_status = psa_destroy_key(key);
+
+		if (status == PSA_SUCCESS) {
+			status = destroy_status;
+		}
+	}
+
+	if (status != PSA_SUCCESS) {
+		printf("PSA error: %ld\n", (long)status);
+	}
+
+	zassert_equal(status, PSA_SUCCESS);
+}
+#endif
 
 ZTEST_SUITE(psa_crypto_test_suite, NULL, NULL, NULL, NULL, NULL);

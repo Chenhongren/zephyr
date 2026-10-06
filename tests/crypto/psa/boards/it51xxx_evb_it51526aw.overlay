@@ -1,0 +1,17 @@
+/*
+ * Copyright (c) 2026 ITE Corporation. All Rights Reserved.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+&sha256 {
+	status = "disabled";
+};
+
+&psa_crypto {
+	status = "okay";
+};
+
+&rsa {
+	status = "okay";
+};
