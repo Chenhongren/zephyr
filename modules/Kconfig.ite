@@ -1,0 +1,8 @@
+# Copyright (c) 2026 ITE Corporation. All Rights Reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+config ZEPHYR_HAL_ITE_MODULE
+	bool
+
+config ZEPHYR_HAL_ITE_MODULE_BLOBS
+	bool
