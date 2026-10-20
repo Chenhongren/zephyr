@@ -15,3 +15,7 @@
 &rsa {
 	status = "okay";
 };
+
+&sha {
+	status = "okay";
+};

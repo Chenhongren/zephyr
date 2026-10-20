@@ -201,7 +201,7 @@ manifest:
         - hal
     - name: hal_ite
       remote: rengithub
-      revision: main # checkout to main branch
+      revision: it51xxx/psa-crypto/sha # checkout to it51xxx/psa-crypto/sha branch
       path: modules/hal/ite
       groups:
         - hal

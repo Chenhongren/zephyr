@@ -26,10 +26,24 @@ config PSA_CRYPTO_DRIVER_ITE_IT51XXX_RSA
 	  PSA crypto. The driver supports RSA PKCS#1 v1.5 signature
 	  generation and verification.
 
+config PSA_CRYPTO_DRIVER_ITE_IT51XXX_SHA
+	bool "Enable it51xxx sha driver"
+	select SOC_IT51XXX_CPU_IDLE_GATING
+	default y if DT_HAS_ITE_IT51XXX_PSA_SHA_ENABLED
+	help
+	  This option enables the it51xxx hardware SHA driver for
+	  PSA crypto.
+
 configdefault TF_PSA_CRYPTO_DRIVER_CONFIG_FILE
 	default "ite-crypto-config.h"
 
 configdefault TF_PSA_CRYPTO_DISPATCH_DIR
 	default "$(ZEPHYR_HAL_ITE_MODULE_DIR)/psa_crypto_drivers/dispatch"
+
+configdefault SHARED_INTERRUPTS
+	default y if $(dt_nodelabel_enabled,sha) && $(dt_nodelabel_enabled,rsa)
+
+configdefault SHARED_IRQ_MAX_NUM_CLIENTS
+	default 2 if $(dt_nodelabel_enabled,sha) && $(dt_nodelabel_enabled,rsa)
 
 endif # PSA_CRYPTO_DRIVER_ITE_IT51XXX

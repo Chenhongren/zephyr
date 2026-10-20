@@ -1432,6 +1432,11 @@
 				compatible = "ite,it51xxx-psa-rsa";
 				status = "disabled";
 			};
+
+			sha: psa-sha {
+				compatible = "ite,it51xxx-psa-sha";
+				status = "disabled";
+			};
 		};
 
 		spi0: spi@f02600 {
