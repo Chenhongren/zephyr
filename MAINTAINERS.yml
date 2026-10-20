@@ -7188,6 +7188,20 @@ West:
   labels:
     - "platform: Intel ISH"
 
+"West project: hal_ite":
+  status: maintained
+  maintainers:
+    - Dino-Li
+    - GTLin08
+    - RuibinChang
+    - Chenhongren
+  collaborators:
+    - keith-zephyr
+    - fabiobaltieri
+  files: []
+  labels:
+    - "platform: ITE"
+
 "West project: hal_microchip":
   status: maintained
   maintainers:
