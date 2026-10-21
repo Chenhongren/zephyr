@@ -57,6 +57,93 @@ ZTEST_USER(psa_crypto_test_suite, test_sha224)
 	zassert_mem_equal(out_buf, out_buf_ref, sizeof(out_buf_ref));
 }
 
+ZTEST_USER(psa_crypto_test_suite, test_sha256_55_bytes)
+{
+	uint8_t in_buf[] = "1234567890123456789012345678901234567890123456789012345";
+	uint8_t out_buf[PSA_HASH_LENGTH(PSA_ALG_SHA_256)] = { 0 };
+	uint8_t out_buf_ref[PSA_HASH_LENGTH(PSA_ALG_SHA_256)] = {
+		0x03, 0xc3, 0xa7, 0x0e, 0x99, 0xed, 0x5e, 0xec,
+		0xcd, 0x80, 0xf7, 0x37, 0x71, 0xfc, 0xf1, 0xec,
+		0xe6, 0x43, 0xd9, 0x39, 0xd9, 0xec, 0xc7, 0x6f,
+		0x25, 0x54, 0x4b, 0x02, 0x33, 0xf7, 0x08, 0xe9
+	};
+	size_t in_len = sizeof(in_buf) - 1; /* exclude '\0' */
+	size_t out_len;
+	psa_status_t status;
+
+	status = psa_hash_compute(PSA_ALG_SHA_256, in_buf, in_len,
+				  out_buf, sizeof(out_buf), &out_len);
+	zassert_equal(status, PSA_SUCCESS);
+	zassert_mem_equal(out_buf, out_buf_ref, sizeof(out_buf_ref));
+}
+
+ZTEST_USER(psa_crypto_test_suite, test_sha256_512_bytes)
+{
+	uint8_t in_buf[512];
+	uint8_t out_buf[PSA_HASH_LENGTH(PSA_ALG_SHA_256)] = { 0 };
+	const uint8_t out_buf_ref[PSA_HASH_LENGTH(PSA_ALG_SHA_256)] = {
+		0x47, 0x1b, 0xe6, 0x55, 0x8b, 0x66, 0x5e, 0x4f,
+		0x6d, 0xd4, 0x9f, 0x11, 0x84, 0x81, 0x4d, 0x14,
+		0x91, 0xb0, 0x31, 0x5d, 0x46, 0x6b, 0xee, 0xa7,
+		0x68, 0xc1, 0x53, 0xcc, 0x55, 0x00, 0xc8, 0x36
+	};
+	size_t out_len;
+	psa_status_t status;
+
+	memset(in_buf, 'a', sizeof(in_buf));
+
+	status = psa_hash_compute(PSA_ALG_SHA_256, in_buf, sizeof(in_buf),
+				  out_buf, sizeof(out_buf), &out_len);
+	zassert_equal(status, PSA_SUCCESS);
+	zassert_equal(out_len, sizeof(out_buf_ref));
+	zassert_mem_equal(out_buf, out_buf_ref, sizeof(out_buf_ref));
+}
+
+ZTEST_USER(psa_crypto_test_suite, test_sha256_1024_bytes)
+{
+	uint8_t in_buf[1024];
+	uint8_t out_buf[PSA_HASH_LENGTH(PSA_ALG_SHA_256)] = { 0 };
+	const uint8_t out_buf_ref[PSA_HASH_LENGTH(PSA_ALG_SHA_256)] = {
+		0x2e, 0xdc, 0x98, 0x68, 0x47, 0xe2, 0x09, 0xb4,
+		0x01, 0x6e, 0x14, 0x1a, 0x6d, 0xc8, 0x71, 0x6d,
+		0x32, 0x07, 0x35, 0x0f, 0x41, 0x69, 0x69, 0x38,
+		0x2d, 0x43, 0x15, 0x39, 0xbf, 0x29, 0x2e, 0x4a
+	};
+	size_t out_len;
+	psa_status_t status;
+
+	memset(in_buf, 'a', sizeof(in_buf));
+
+	status = psa_hash_compute(PSA_ALG_SHA_256, in_buf, sizeof(in_buf),
+				  out_buf, sizeof(out_buf), &out_len);
+	zassert_equal(status, PSA_SUCCESS);
+	zassert_equal(out_len, sizeof(out_buf_ref));
+	zassert_mem_equal(out_buf, out_buf_ref, sizeof(out_buf_ref));
+}
+
+ZTEST_USER(psa_crypto_test_suite, test_sha256_2048_bytes)
+{
+	uint8_t in_buf[2048];
+	uint8_t out_buf[PSA_HASH_LENGTH(PSA_ALG_SHA_256)] = { 0 };
+	const uint8_t out_buf_ref[PSA_HASH_LENGTH(PSA_ALG_SHA_256)] = {
+		0xb2, 0xa3, 0xa5, 0x02, 0xfd, 0xfc, 0x34, 0xf4,
+		0xe3, 0xed, 0xfa, 0x94, 0xb7, 0xf3, 0x10, 0x9c,
+		0xd9, 0x72, 0xd8, 0x7a, 0x4f, 0xec, 0x63, 0xab,
+		0x21, 0xa6, 0x67, 0x33, 0x79, 0xcc, 0xf7, 0xad
+	};
+	size_t out_len;
+	psa_status_t status;
+
+	memset(in_buf, 'a', sizeof(in_buf));
+
+	status = psa_hash_compute(PSA_ALG_SHA_256, in_buf, sizeof(in_buf),
+				  out_buf, sizeof(out_buf), &out_len);
+	zassert_equal(status, PSA_SUCCESS);
+	zassert_equal(out_len, sizeof(out_buf_ref));
+	zassert_mem_equal(out_buf, out_buf_ref, sizeof(out_buf_ref));
+}
+
+
 ZTEST_USER(psa_crypto_test_suite, test_sha256)
 {
 	uint8_t in_buf[] = { 'a' };
