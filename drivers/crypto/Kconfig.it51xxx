@@ -10,3 +10,13 @@ config CRYPTO_IT51XXX_SHA
 	help
 	  The IT51XXX hardware supports SHA-256 calculation, which is faster than
 	  the firmware implementation.
+
+config CRYPTO_IT51XXX_RSA
+	bool "ITE IT51XXX RSA driver"
+	depends on DT_HAS_ITE_IT51XXX_RSA_ENABLED
+	select MFD
+	select SOC_IT51XXX_HW_CRYPTO_ACCELERATE
+	select SOC_IT51XXX_CPU_IDLE_GATING
+	default y
+	help
+	  This option enables it51xxx hardware rsa engine.
