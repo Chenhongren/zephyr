@@ -21,6 +21,7 @@
 #include <zephyr/sys/__assert.h>
 #include <zephyr/crypto/hash.h>
 #include "cipher.h"
+#include "rsa.h"
 
 /**
  * @brief Crypto APIs
@@ -125,6 +126,19 @@ typedef int (*crypto_api_hash_free_session)(const struct device *dev, struct has
 typedef int (*crypto_api_hash_async_callback_set)(const struct device *dev, hash_completion_cb cb);
 
 /**
+ * @brief Setup a crypto rsa session.
+ * See rsa_begin_session() for argument description.
+ */
+typedef int (*crypto_api_rsa_begin_session)(const struct device *dev, struct rsa_ctx *ctx,
+					     enum rsa_algo algo, struct rsa_key key);
+
+/**
+ * @brief Cleanup a crypto rsa session.
+ * See rsa_free_session() for argument description.
+ */
+typedef int (*crypto_api_rsa_free_session)(const struct device *dev, struct rsa_ctx *ctx);
+
+/**
  * @driver_ops{Crypto}
  */
 __subsystem struct crypto_driver_api {
@@ -148,6 +162,12 @@ __subsystem struct crypto_driver_api {
 
 	/** @driver_ops_optional @copybrief crypto_api_hash_async_callback_set */
 	crypto_api_hash_async_callback_set hash_async_callback_set;
+
+	/** @driver_ops_mandatory @copybrief crypto_api_rsa_begin_session */
+	crypto_api_rsa_begin_session rsa_begin_session;
+
+	/** @driver_ops_mandatory @copybrief crypto_api_rsa_free_session */
+	crypto_api_rsa_free_session rsa_free_session;
 };
 
 /**
@@ -581,4 +601,74 @@ static inline int hash_update(struct hash_ctx *ctx, struct hash_pkt *pkt)
  * @}
  */
 
+/**
+ * @brief Crypto RSA APIs
+ * @defgroup crypto_rsa RSA
+ * @ingroup crypto
+ * @{
+ */
+
+/* TODO */
+static inline int rsa_begin_session(const struct device *dev,
+				     struct rsa_ctx *ctx,
+				     enum rsa_algo algo, struct rsa_key key)
+{
+	const struct crypto_driver_api *api = DEVICE_API_GET(crypto, dev);
+	// uint32_t flags;
+
+	ctx->device = dev;
+
+	// flags = (ctx->flags & (CAP_INPLACE_OPS | CAP_SEPARATE_IO_BUFS));
+	// __ASSERT(flags != 0U, "IO buffer type missing");
+	// __ASSERT(flags != (CAP_INPLACE_OPS | CAP_SEPARATE_IO_BUFS),
+	// 		"conflicting options for IO buffer type");
+
+	// flags = (ctx->flags & (CAP_SYNC_OPS | CAP_ASYNC_OPS));
+	// __ASSERT(flags != 0U, "sync/async type missing");
+	// __ASSERT(flags != (CAP_SYNC_OPS |  CAP_ASYNC_OPS),
+	// 		"conflicting options for sync/async");
+
+
+	return api->rsa_begin_session(dev, ctx, algo, key);
+}
+
+/* TODO */
+static inline int rsa_free_session(const struct device *dev,
+				    struct rsa_ctx *ctx)
+{
+	return DEVICE_API_GET(crypto, dev)->rsa_free_session(dev, ctx);
+}
+
+/* TODO */
+// static inline int rsa_callback_set(const struct device *dev,
+// 				    rsa_completion_cb cb)
+// {
+// 	const struct crypto_driver_api *api = DEVICE_API_GET(crypto, dev);
+
+// 	if (api->rsa_async_callback_set) {
+// 		return api->rsa_async_callback_set(dev, cb);
+// 	}
+
+// 	return -ENOTSUP;
+// }
+
+/* TODO */
+static inline int rsa_sign(struct rsa_ctx *ctx, struct rsa_pkt *pkt)
+{
+	pkt->ctx = ctx;
+
+	return ctx->sign_hndlr(ctx, pkt);
+}
+
+/* TODO */
+static inline int rsa_verify(struct rsa_ctx *ctx, struct rsa_pkt *pkt, bool exp_3)
+{
+	pkt->ctx = ctx;
+
+	return ctx->verify_hndlr(ctx, pkt, exp_3);
+}
+
+/**
+ * @}
+ */
 #endif /* ZEPHYR_INCLUDE_CRYPTO_CRYPTO_H_ */
