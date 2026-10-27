@@ -1,0 +1,44 @@
+/*
+ * Copyright (c) 2026 ITE Corporation. All Rights Reserved.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+/ {
+	chosen {
+		zephyr,code-partition = &slot0_partition;
+	};
+};
+
+&flash0 {
+	partitions {
+		ranges;
+		#address-cells = <1>;
+		#size-cells = <1>;
+
+		boot_partition: partition@0 {
+			compatible = "zephyr,mapped-partition";
+			label = "mcuboot";
+			reg = <0x00000000 0x20000>;
+		};
+
+		slot0_partition: partition@00020000 {
+			compatible = "zephyr,mapped-partition";
+			label = "image0";
+			reg = <0x00020000 0x30000>;
+		};
+
+		slot1_partition: partition@00050000 {
+			compatible = "zephyr,mapped-partition";
+			label = "image1";
+			reg = <0x00050000 0x30000>;
+		};
+
+		/* scratch_partition can be removed if SB_CONFIG_MCUBOOT_MODE_SWAP_SCRATCH=n */
+		scratch_partition: partition@80000 {
+			compatible = "zephyr,mapped-partition";
+			label = "image-scratch";
+			reg = <0x00080000 0x1000>;
+		};
+	};
+};
