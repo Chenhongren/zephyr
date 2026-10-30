@@ -1,0 +1,65 @@
+# Copyright (c) 2026 ITE Corporation.
+# SPDX-License-Identifier: Apache-2.0
+
+module = IT51XXX_PSA_CRYPTO
+module-str = it51xxx-psa-crypto
+source "subsys/logging/Kconfig.template.log_config"
+
+config IT51XXX_PSA_CRYPTO
+	bool "ITE IT51XXX PSA crypto device driver"
+	depends on DT_HAS_ITE_IT51XXX_CRYPTO_ENABLED
+	depends on PSA_CRYPTO
+	select SOC_IT51XXX_HW_CRYPTO_ACCELERATE
+	default y
+	help
+	  This option enables the it51xxx psa crypto driver.
+
+if IT51XXX_PSA_CRYPTO
+
+config IT51XXX_PSA_CRYPTO_INIT_PRIORITY
+	int "ITE IT51XXX PSA crypto init priority"
+	default 40
+	help
+	  Initialization priority for the it51xxx psa crypto driver.
+	  This must be lower than the init priority of the child
+	  driver (IT51XXX_PSA_CRYPTO_RSA_INIT_PRIORITY and
+	  IT51XXX_PSA_CRYPTO_SHA_INIT_PRIORITY) so the shared
+	  resources are ready before child uses them.
+
+config IT51XXX_PSA_CRYPTO_RSA
+	bool "IT51XXX PSA crypto RSA driver"
+	default y
+	depends on DT_HAS_ITE_IT51XXX_PSA_RSA_ENABLED
+	select SOC_IT51XXX_CPU_IDLE_GATING
+	help
+	  This option enables it51xxx psa crypto rsa driver.
+
+if IT51XXX_PSA_CRYPTO_RSA
+
+config IT51XXX_PSA_CRYPTO_RSA_INIT_PRIORITY
+	int "IT51XXX PSA crypto RSA init priority"
+	default 51
+	help
+	  The it51xxx psa crypto rsa init priority.
+
+endif # IT51XXX_PSA_CRYPTO_RSA
+
+config IT51XXX_PSA_CRYPTO_SHA
+	bool "IT51XXX PSA crypto SHA driver"
+	default y
+	depends on DT_HAS_ITE_IT51XXX_PSA_SHA_ENABLED
+	select SOC_IT51XXX_CPU_IDLE_GATING
+	help
+	  This option enables it51xxx psa crypto sha driver.
+
+if IT51XXX_PSA_CRYPTO_SHA
+
+config IT51XXX_PSA_CRYPTO_SHA_INIT_PRIORITY
+	int "IT51XXX PSA crypto SHA init priority"
+	default 51
+	help
+	  The it51xxx psa crypto sha init priority.
+
+endif # IT51XXX_PSA_CRYPTO_SHA
+
+endif # IT51XXX_PSA_CRYPTO
