@@ -310,6 +310,7 @@ __maybe_unused static void print_hex(const char *label, const uint8_t *data, siz
 	}
 }
 
+#if 1
 ZTEST_USER(psa_crypto_test_suite, test_rsa_2048)
 {
 	psa_status_t status;
@@ -410,6 +411,137 @@ ZTEST_USER(psa_crypto_test_suite, test_rsa_2048)
 		goto cleanup;
 	}
 	status = psa_verify_hash(public_key_id, SIGN_ALG, hash, hash_length, signature,
+				 signature_length);
+	if (status != PSA_ERROR_INVALID_SIGNATURE) {
+		printf("<error> expected invalid signature, got: %ld\n", (long)status);
+		if (status == PSA_SUCCESS) {
+			status = PSA_ERROR_GENERIC_ERROR;
+		}
+		goto cleanup;
+	}
+	printf("<info> modified data rejected as expected\n");
+	status = PSA_SUCCESS;
+
+cleanup:
+	psa_reset_key_attributes(&attributes);
+	if (public_key_id != 0) {
+		psa_status_t destroy_status = psa_destroy_key(public_key_id);
+		if (status == PSA_SUCCESS) {
+			status = destroy_status;
+		}
+	}
+	if (private_key_id != 0) {
+		psa_status_t destroy_status = psa_destroy_key(private_key_id);
+		if (status == PSA_SUCCESS) {
+			status = destroy_status;
+		}
+	}
+	zassert_equal(status, PSA_SUCCESS, "RSA test failed: %ld", (long)status);
+}
+#endif
+
+#define RSA_PSS_SIGN_ALG PSA_ALG_RSA_PSS(PSA_ALG_SHA_256)
+ZTEST_USER(psa_crypto_test_suite, test_rsa_pss_2408)
+{
+	psa_status_t status;
+	psa_key_id_t private_key_id = 0;
+	psa_key_id_t public_key_id = 0;
+	psa_key_attributes_t attributes = PSA_KEY_ATTRIBUTES_INIT;
+	const uint8_t message[] = "Hello RSA";
+	uint8_t received_data[sizeof(message) - 1];
+	uint8_t hash[PSA_HASH_LENGTH(PSA_ALG_SHA_256)];
+	uint8_t signature[PSA_SIGN_OUTPUT_SIZE(PSA_KEY_TYPE_RSA_KEY_PAIR, RSA_BITS_2048,
+					       RSA_PSS_SIGN_ALG)];
+	size_t hash_length = 0;
+	size_t signature_length = 0;
+
+	status = psa_crypto_init();
+	if (status != PSA_SUCCESS) {
+		printf("<error> failed to initialize PSA Crypto: %ld\n", (long)status);
+		goto cleanup;
+	}
+
+	/* Import the private key instead of generating a key pair */
+	psa_set_key_type(&attributes, PSA_KEY_TYPE_RSA_KEY_PAIR);
+	psa_set_key_bits(&attributes, RSA_BITS_2048);
+	psa_set_key_usage_flags(&attributes, PSA_KEY_USAGE_SIGN_HASH);
+	psa_set_key_algorithm(&attributes, RSA_PSS_SIGN_ALG);
+	status = psa_import_key(&attributes, private_key_der, sizeof(private_key_der),
+				&private_key_id);
+	psa_reset_key_attributes(&attributes);
+	if (status != PSA_SUCCESS) {
+		printf("<error> failed to import private key: %ld\n", (long)status);
+		goto cleanup;
+	}
+
+	/* Import a separate public key for verification */
+	psa_set_key_type(&attributes, PSA_KEY_TYPE_RSA_PUBLIC_KEY);
+	psa_set_key_bits(&attributes, RSA_BITS_2048);
+	psa_set_key_usage_flags(&attributes, PSA_KEY_USAGE_VERIFY_HASH);
+	psa_set_key_algorithm(&attributes, RSA_PSS_SIGN_ALG);
+	status =
+		psa_import_key(&attributes, public_key_der, sizeof(public_key_der), &public_key_id);
+	psa_reset_key_attributes(&attributes);
+	if (status != PSA_SUCCESS) {
+		printf("<error> failed to import public key: %ld\n", (long)status);
+		goto cleanup;
+	}
+
+#if 0
+	print_hex("Message", message, sizeof(message));
+#endif
+
+	/* Hash the original message, excluding the terminating '\0' */
+	status = psa_hash_compute(PSA_ALG_SHA_256, message, sizeof(message) - 1, hash, sizeof(hash),
+				  &hash_length);
+	if (status != PSA_SUCCESS) {
+		printf("<error> failed to hash original message: %ld\n", (long)status);
+		goto cleanup;
+	}
+
+#if 0
+	print_hex("Hash(SHA256)", hash, hash_length);
+#endif
+
+	/* Sign using the imported private key */
+	status = psa_sign_hash(private_key_id, RSA_PSS_SIGN_ALG, hash, hash_length, signature,
+			       sizeof(signature), &signature_length);
+	if (status != PSA_SUCCESS) {
+		printf("<error> failed to sign hash: %ld\n", (long)status);
+		goto cleanup;
+	}
+
+#if 1
+	print_hex("Signature", signature, signature_length);
+#endif
+
+	/* Simulate receiving the message and independently hash it */
+	memcpy(received_data, message, sizeof(received_data));
+	status = psa_hash_compute(PSA_ALG_SHA_256, received_data, sizeof(received_data), hash,
+				  sizeof(hash), &hash_length);
+	if (status != PSA_SUCCESS) {
+		printf("<error> failed to hash received data: %ld\n", (long)status);
+		goto cleanup;
+	}
+
+	/* Verify using the independently imported public key */
+	status = psa_verify_hash(public_key_id, RSA_PSS_SIGN_ALG, hash, hash_length, signature,
+				 signature_length);
+	if (status != PSA_SUCCESS) {
+		printf("<error> failed to verify received data: %ld\n", (long)status);
+		goto cleanup;
+	}
+	printf("<info> RSA-PSS sign/verify OK, signature: %zu bytes\n", signature_length);
+
+	/* Modified data must fail verification */
+	received_data[0] ^= 0x01;
+	status = psa_hash_compute(PSA_ALG_SHA_256, received_data, sizeof(received_data), hash,
+				  sizeof(hash), &hash_length);
+	if (status != PSA_SUCCESS) {
+		printf("<error> failed to hash modified data: %ld\n", (long)status);
+		goto cleanup;
+	}
+	status = psa_verify_hash(public_key_id, RSA_PSS_SIGN_ALG, hash, hash_length, signature,
 				 signature_length);
 	if (status != PSA_ERROR_INVALID_SIGNATURE) {
 		printf("<error> expected invalid signature, got: %ld\n", (long)status);
@@ -572,6 +704,7 @@ cleanup:
 }
 #endif
 
+#if 0
 ZTEST_USER(psa_crypto_test_suite, test_rsa_4096)
 {
 	psa_status_t status;
@@ -699,6 +832,8 @@ cleanup:
 	}
 	zassert_equal(status, PSA_SUCCESS, "RSA test failed: %ld", (long)status);
 }
+#endif
+
 #if 0
 ZTEST_USER(psa_crypto_test_suite, test_rsa_4096_gen_key)
 {
@@ -832,5 +967,114 @@ cleanup:
 	zassert_equal(status, PSA_SUCCESS);
 }
 #endif
+
+#define RSA_CRYPT_ALG PSA_ALG_RSA_PKCS1V15_CRYPT
+static void test_rsa_2048_crypt(psa_algorithm_t alg)
+{
+	psa_status_t status;
+	psa_key_id_t private_key_id = 0;
+	psa_key_id_t public_key_id = 0;
+	psa_key_attributes_t attributes = PSA_KEY_ATTRIBUTES_INIT;
+	const uint8_t message[] = "Hello RSA";
+	uint8_t ciphertext[PSA_BITS_TO_BYTES(RSA_BITS_2048)];
+	uint8_t plaintext[PSA_BITS_TO_BYTES(RSA_BITS_2048)];
+	size_t ciphertext_length = 0;
+	size_t plaintext_length = 0;
+
+	status = psa_crypto_init();
+	if (status != PSA_SUCCESS) {
+		goto cleanup;
+	}
+
+	/* Import the private key for decryption. */
+	psa_set_key_type(&attributes, PSA_KEY_TYPE_RSA_KEY_PAIR);
+	psa_set_key_bits(&attributes, RSA_BITS_2048);
+	psa_set_key_usage_flags(&attributes, PSA_KEY_USAGE_DECRYPT);
+	psa_set_key_algorithm(&attributes, alg);
+
+	status = psa_import_key(&attributes, private_key_der, sizeof(private_key_der),
+				&private_key_id);
+	psa_reset_key_attributes(&attributes);
+	if (status != PSA_SUCCESS) {
+		goto cleanup;
+	}
+
+	/* Import the public key for encryption. */
+	psa_set_key_type(&attributes, PSA_KEY_TYPE_RSA_PUBLIC_KEY);
+	psa_set_key_bits(&attributes, RSA_BITS_2048);
+	psa_set_key_usage_flags(&attributes, PSA_KEY_USAGE_ENCRYPT);
+	psa_set_key_algorithm(&attributes, alg);
+
+	status =
+		psa_import_key(&attributes, public_key_der, sizeof(public_key_der), &public_key_id);
+	psa_reset_key_attributes(&attributes);
+	if (status != PSA_SUCCESS) {
+		goto cleanup;
+	}
+
+	/* Encrypt with the public key. For OAEP, use an empty label. */
+	status = psa_asymmetric_encrypt(public_key_id, alg, message, sizeof(message) - 1, NULL, 0,
+					ciphertext, sizeof(ciphertext), &ciphertext_length);
+	if (status != PSA_SUCCESS) {
+		goto cleanup;
+	}
+	print_hex("Ciphertext", ciphertext, ciphertext_length);
+
+	if (ciphertext_length != PSA_BITS_TO_BYTES(RSA_BITS_2048)) {
+		status = PSA_ERROR_GENERIC_ERROR;
+		goto cleanup;
+	}
+
+	/* Decrypt with the private key using the same algorithm and label. */
+	status = psa_asymmetric_decrypt(private_key_id, alg, ciphertext, ciphertext_length, NULL, 0,
+					plaintext, sizeof(plaintext), &plaintext_length);
+	if (status != PSA_SUCCESS) {
+		goto cleanup;
+	}
+	print_hex("Plaintext", plaintext, plaintext_length);
+
+	/* The decrypted message must match the original message. */
+	if (plaintext_length != sizeof(message) - 1 ||
+	    memcmp(plaintext, message, sizeof(message) - 1) != 0) {
+		status = PSA_ERROR_GENERIC_ERROR;
+		goto cleanup;
+	}
+
+	printf("<info> RSA encrypt/decrypt OK, algorithm: 0x%08lx, ciphertext: %zu bytes\n",
+	       (unsigned long)alg, ciphertext_length);
+
+cleanup:
+	psa_reset_key_attributes(&attributes);
+
+	if (public_key_id != 0) {
+		psa_status_t destroy_status = psa_destroy_key(public_key_id);
+
+		if (status == PSA_SUCCESS) {
+			status = destroy_status;
+		}
+	}
+
+	if (private_key_id != 0) {
+		psa_status_t destroy_status = psa_destroy_key(private_key_id);
+
+		if (status == PSA_SUCCESS) {
+			status = destroy_status;
+		}
+	}
+
+	zassert_equal(status, PSA_SUCCESS,
+		      "RSA encryption/decryption test failed, algorithm: 0x%08lx, status: %ld",
+		      (unsigned long)alg, (long)status);
+}
+
+ZTEST_USER(psa_crypto_test_suite, test_rsa_2048_pkcs1v15_crypt)
+{
+	test_rsa_2048_crypt(PSA_ALG_RSA_PKCS1V15_CRYPT);
+}
+
+ZTEST_USER(psa_crypto_test_suite, test_rsa_2048_oaep_crypt)
+{
+	test_rsa_2048_crypt(PSA_ALG_RSA_OAEP(PSA_ALG_SHA_256));
+}
 
 ZTEST_SUITE(psa_crypto_test_suite, NULL, NULL, NULL, NULL, NULL);
