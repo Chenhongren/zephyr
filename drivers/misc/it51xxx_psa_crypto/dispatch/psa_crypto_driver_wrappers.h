@@ -2295,6 +2295,14 @@ static inline psa_status_t psa_driver_wrapper_asymmetric_encrypt(
 			return status;
 		}
 #endif /* PSA_CRYPTO_DRIVER_TEST */
+#if defined(PSA_CRYPTO_DRIVER_ITE_IT51XXX_RSA)
+		status = ite_it51xxx_encrypt(attributes, key_buffer, key_buffer_size, alg, input,
+					     input_length, salt, salt_length, output, output_size,
+					     output_length);
+		if (status != PSA_ERROR_NOT_SUPPORTED) {
+			return status;
+		}
+#endif /* PSA_CRYPTO_DRIVER_ITE_IT51XXX_RSA */
 #endif /* PSA_CRYPTO_ACCELERATOR_DRIVER_PRESENT */
 		return (mbedtls_psa_asymmetric_encrypt(attributes, key_buffer, key_buffer_size, alg,
 						       input, input_length, salt, salt_length,
@@ -2350,6 +2358,14 @@ static inline psa_status_t psa_driver_wrapper_asymmetric_decrypt(
 			return status;
 		}
 #endif /* PSA_CRYPTO_DRIVER_TEST */
+#if defined(PSA_CRYPTO_DRIVER_ITE_IT51XXX_RSA)
+		status = ite_it51xxx_decrypt(attributes, key_buffer, key_buffer_size, alg, input,
+					     input_length, salt, salt_length, output, output_size,
+					     output_length);
+		if (status != PSA_ERROR_NOT_SUPPORTED) {
+			return status;
+		}
+#endif /* PSA_CRYPTO_DRIVER_ITE_IT51XXX_RSA */
 #endif /* PSA_CRYPTO_ACCELERATOR_DRIVER_PRESENT */
 		return (mbedtls_psa_asymmetric_decrypt(attributes, key_buffer, key_buffer_size, alg,
 						       input, input_length, salt, salt_length,

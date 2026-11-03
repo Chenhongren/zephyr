@@ -30,6 +30,9 @@ config IT51XXX_PSA_CRYPTO_RSA
 	depends on DT_HAS_ITE_IT51XXX_PSA_RSA_ENABLED
 	select SOC_IT51XXX_CPU_IDLE_GATING
 	select PSA_WANT_ALG_RSA_PKCS1V15_SIGN
+	select PSA_WANT_ALG_RSA_PSS
+	select PSA_WANT_ALG_RSA_PKCS1V15_CRYPT # TODO: THINK
+	select PSA_WANT_ALG_RSA_OAEP # TODO: THINK
 	help
 	  This option enables it51xxx psa crypto rsa driver.
 
