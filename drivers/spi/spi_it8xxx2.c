@@ -102,6 +102,7 @@ struct spi_it8xxx2_data {
 	struct spi_it8xxx2_cmdq_data cmdq_data;
 	size_t transfer_len;
 	size_t receive_len;
+	bool active;
 };
 
 static inline void spi_it8xxx2_turn_on_clk(const struct device *dev, const bool enable)
@@ -240,10 +241,11 @@ static inline bool spi_it8xxx2_transfer_done(struct spi_context *ctx)
 	return !spi_context_tx_buf_on(ctx) && !spi_context_rx_buf_on(ctx);
 }
 
-static void spi_it8xxx2_complete(const struct device *dev, const int status)
+static void spi_it8xxx2_cleanup(const struct device *dev)
 {
 	struct spi_it8xxx2_data *data = dev->data;
-	struct spi_context *ctx = &data->ctx;
+
+	data->active = false;
 
 	/* Permit to enter power policy and idle mode. */
 	pm_policy_state_lock_put(PM_STATE_STANDBY, PM_ALL_SUBSTATES);
@@ -251,8 +253,14 @@ static void spi_it8xxx2_complete(const struct device *dev, const int status)
 
 	/* disable spi clock */
 	spi_it8xxx2_turn_on_clk(dev, false);
+}
 
-	spi_context_complete(ctx, dev, status);
+static void spi_it8xxx2_complete(const struct device *dev, const int status)
+{
+	struct spi_it8xxx2_data *data = dev->data;
+
+	spi_it8xxx2_cleanup(dev);
+	spi_context_complete(&data->ctx, dev, status);
 }
 
 static inline void spi_it8xxx2_tx(const struct device *dev)
@@ -414,10 +422,29 @@ static int spi_it8xxx2_next_xfer(const struct device *dev)
 	return 0;
 }
 
+static void spi_it8xxx2_abort(const struct device *dev)
+{
+	const struct spi_it8xxx2_config *cfg = dev->config;
+	uint8_t reg_val;
+
+	/* disable spi interrupts */
+	sys_write8(sys_read8(cfg->base + SPI01_CTRL1) & ~INTERRUPT_EN, cfg->base + SPI01_CTRL1);
+
+	/* stop spi cmdq mode */
+	reg_val = sys_read8(cfg->base + SPI0D_CTRL5);
+	reg_val &= ~(CMDQ_MODE_EN | CH0_SEL_CMDQ | CH1_SEL_CMDQ);
+	sys_write8(reg_val, cfg->base + SPI0D_CTRL5);
+
+	/* clear interrupt status */
+	sys_write8(sys_read8(cfg->base + SPI0C_INT_STS), cfg->base + SPI0C_INT_STS);
+	ite_intc_isr_clear(cfg->spi_irq);
+}
+
 static int transceive(const struct device *dev, const struct spi_config *config,
 		      const struct spi_buf_set *tx_bufs, const struct spi_buf_set *rx_bufs,
 		      bool asynchronous, spi_callback_t cb, void *userdata)
 {
+	const struct spi_it8xxx2_config *cfg = dev->config;
 	struct spi_it8xxx2_data *data = dev->data;
 	struct spi_context *ctx = &data->ctx;
 	int ret;
@@ -442,12 +469,32 @@ static int transceive(const struct device *dev, const struct spi_config *config,
 	/* enable spi clock */
 	spi_it8xxx2_turn_on_clk(dev, true);
 
+	irq_disable(cfg->spi_irq);
+
+	/* clear the stale completion */
+	spi_context_clear_completion(ctx);
+
 	spi_context_buffers_setup(ctx, tx_bufs, rx_bufs, 1);
+
+	data->active = true;
+
 	ret = spi_it8xxx2_next_xfer(dev);
+	if (ret && data->active) {
+		spi_it8xxx2_cleanup(dev);
+	}
+
+	irq_enable(cfg->spi_irq);
+
 	if (!ret) {
 		ret = spi_context_wait_for_completion(ctx);
-	} else {
-		spi_it8xxx2_complete(dev, ret);
+		if (ret == -ETIMEDOUT) {
+			irq_disable(cfg->spi_irq);
+			if (data->active) {
+				spi_it8xxx2_abort(dev);
+				spi_it8xxx2_cleanup(dev);
+			}
+			irq_enable(cfg->spi_irq);
+		}
 	}
 
 	spi_context_release(ctx, ret);
@@ -486,6 +533,11 @@ static void it8xxx2_spi_isr(const void *arg)
 	struct spi_context *ctx = &data->ctx;
 	uint8_t reg_val;
 	int ret;
+
+	/* ignore the pending interrupt */
+	if (!data->active) {
+		return;
+	}
 
 	reg_val = sys_read8(cfg->base + SPI0C_INT_STS);
 	sys_write8(reg_val, cfg->base + SPI0C_INT_STS);
