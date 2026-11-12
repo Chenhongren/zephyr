@@ -102,6 +102,7 @@ struct spi_it8xxx2_data {
 	struct spi_it8xxx2_cmdq_data cmdq_data;
 	size_t transfer_len;
 	size_t receive_len;
+	bool active;
 };
 
 static inline void spi_it8xxx2_turn_on_clk(const struct device *dev, const bool enable)
@@ -244,6 +245,8 @@ static void spi_it8xxx2_complete(const struct device *dev, const int status)
 {
 	struct spi_it8xxx2_data *data = dev->data;
 	struct spi_context *ctx = &data->ctx;
+
+	data->active = false;
 
 	/* Permit to enter power policy and idle mode. */
 	pm_policy_state_lock_put(PM_STATE_STANDBY, PM_ALL_SUBSTATES);
@@ -414,12 +417,30 @@ static int spi_it8xxx2_next_xfer(const struct device *dev)
 	return 0;
 }
 
+static void spi_it8xxx2_abort(const struct device *dev)
+{
+	const struct spi_it8xxx2_config *cfg = dev->config;
+	uint8_t reg_val;
+
+	/* disable spi interrupts */
+	sys_write8(sys_read8(cfg->base + SPI01_CTRL1) & ~INTERRUPT_EN, cfg->base + SPI01_CTRL1);
+
+	/* stop spi cmdq mode */
+	reg_val = sys_read8(cfg->base + SPI0D_CTRL5);
+	reg_val &= ~(CMDQ_MODE_EN | CH0_SEL_CMDQ | CH1_SEL_CMDQ);
+	sys_write8(reg_val, cfg->base + SPI0D_CTRL5);
+
+	/* clear interrupt status */
+	sys_write8(sys_read8(cfg->base + SPI0C_INT_STS), cfg->base + SPI0C_INT_STS);
+}
+
 static int transceive(const struct device *dev, const struct spi_config *config,
 		      const struct spi_buf_set *tx_bufs, const struct spi_buf_set *rx_bufs,
 		      bool asynchronous, spi_callback_t cb, void *userdata)
 {
 	struct spi_it8xxx2_data *data = dev->data;
 	struct spi_context *ctx = &data->ctx;
+	unsigned int key;
 	int ret;
 
 	spi_context_lock(ctx, asynchronous, cb, userdata, config);
@@ -442,10 +463,22 @@ static int transceive(const struct device *dev, const struct spi_config *config,
 	/* enable spi clock */
 	spi_it8xxx2_turn_on_clk(dev, true);
 
+	/* clear the stale completion */
+	spi_context_clear_completion(ctx);
+
 	spi_context_buffers_setup(ctx, tx_bufs, rx_bufs, 1);
+	data->active = true;
 	ret = spi_it8xxx2_next_xfer(dev);
 	if (!ret) {
 		ret = spi_context_wait_for_completion(ctx);
+		if (ret == -ETIMEDOUT) {
+			key = irq_lock();
+			if (data->active) {
+				spi_it8xxx2_abort(dev);
+				spi_it8xxx2_complete(dev, ret);
+			}
+			irq_unlock(key);
+		}
 	} else {
 		spi_it8xxx2_complete(dev, ret);
 	}
@@ -489,6 +522,12 @@ static void it8xxx2_spi_isr(const void *arg)
 
 	reg_val = sys_read8(cfg->base + SPI0C_INT_STS);
 	sys_write8(reg_val, cfg->base + SPI0C_INT_STS);
+
+	/* ignore the pending interrupt */
+	if (!data->active) {
+		return;
+	}
+
 	if (reg_val & (SPI_DMA_RBUF_0_FULL | SPI_DMA_RBUF_1_FULL)) {
 		LOG_INF("Triggered dma ring buffer full interrupt, status: 0x%x", reg_val);
 	}
