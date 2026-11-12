@@ -1,0 +1,20 @@
+&spi0 {
+	status = "okay";
+	
+	pinctrl-0 = <&spi_ssce0_default
+		     &spi_ssce1_default
+		     &spi_ssck_default
+		     &spi_smosi_default
+		     &spi_smiso_default
+		     &spi_sio2_default
+		     &spi_sio3_default>;
+	pinctrl-names = "default";
+
+	mx25r16: mx25v1633f@0 {
+		compatible = "jedec,spi-nor";
+		reg = <0>;
+		spi-max-frequency = <12000000>;
+		jedec-id = [c2 23 15];
+		size = <0x1000000>; // 16Mb
+	};
+};

@@ -193,6 +193,7 @@ static inline void spi_context_release(struct spi_context *ctx, int status)
 #endif /* CONFIG_MULTITHREADING */
 }
 
+static uint8_t debug = 1;
 static inline size_t spi_context_total_tx_len(struct spi_context *ctx);
 static inline size_t spi_context_total_rx_len(struct spi_context *ctx);
 
@@ -228,6 +229,10 @@ static inline int spi_context_wait_for_completion(struct spi_context *ctx)
 			timeout_ms = ctx->max_count * 8 * 1000 / ctx->config->frequency;
 			timeout_ms += CONFIG_SPI_COMPLETION_TIMEOUT_TOLERANCE;
 			timeout = K_MSEC(timeout_ms);
+			if (debug == 10) {
+				timeout = K_NO_WAIT;
+			}
+			debug++;
 		}
 #ifdef CONFIG_MULTITHREADING
 		if (k_sem_take(&ctx->sync, timeout)) {
