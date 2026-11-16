@@ -198,6 +198,9 @@ static void timer_driver_set_reload(uint32_t cycles)
 	ite_intc_isr_clear(EVENT_TIMER_IRQ);
 
 	evt_timer_enable();
+
+	sys_write8(0x40, 0xf01660);
+	sys_write8(sys_read8(0xf01601) | BIT(0), 0xf01601);
 }
 
 #include "system_timer_generic.h"
@@ -218,6 +221,9 @@ static void evt_timer_isr(const void *unused)
 		 */
 		evt_timer_enable();
 	}
+
+	sys_write8(0x40, 0xf01660);
+	sys_write8(sys_read8(0xf01601) & ~BIT(0), 0xf01601);
 
 	timer_core_announce();
 }
@@ -308,7 +314,9 @@ static int timer_init(enum ext_timer_idx ext_timer,
 
 bool ite_it8xxx2_timer_block_idle(void)
 {
-	return (IT8XXX2_EXT_CNTOX(EVENT_TIMER) < IDLE_BLOCK_TIMER_TICKS) ||
+	bool evt_timer_is_enabled = IT8XXX2_EXT_CTRLX(EVENT_TIMER) & IT8XXX2_EXT_ETXEN;
+
+	return (evt_timer_is_enabled && IT8XXX2_EXT_CNTOX(EVENT_TIMER) < IDLE_BLOCK_TIMER_TICKS) ||
 	       (IT8XXX2_EXT_CNTOX(FREE_RUN_TIMER) < IDLE_BLOCK_TIMER_TICKS);
 }
 
