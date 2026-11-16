@@ -118,6 +118,7 @@ struct spi_it51xxx_config {
 
 struct spi_it51xxx_data {
 	struct spi_context ctx;
+	bool active;
 
 #ifdef CONFIG_SPI_ITE_IT51XXX_FIFO_MODE
 	uint8_t xfer_mode;
@@ -458,6 +459,56 @@ static inline bool spi_it51xxx_xfer_done(struct spi_context *ctx)
 	return !spi_context_tx_buf_on(ctx) && !spi_context_rx_buf_on(ctx);
 }
 
+static void spi_it51xxx_abort(const struct device *dev)
+{
+	/* TODO: abort transfer */
+}
+
+static int spi_it51xxx_cleanup(const struct device *dev)
+{
+	const struct spi_it51xxx_config *cfg = dev->config;
+	struct spi_it51xxx_data *data = dev->data;
+	int ret;
+
+	if (!data->active) {
+		return 0;
+	}
+
+	data->active = false;
+
+	ret = clock_control_off(cfg->clk_dev, (clock_control_subsys_t *)&cfg->clk_cfg);
+	if (ret) {
+		LOG_ERR("failed to turn off spi clock %d", ret);
+	}
+
+#ifdef CONFIG_SPI_ITE_IT51XXX_FIFO_MODE
+	data->direction_turnaround = false;
+	chip_permit_idle();
+#endif /* CONFIG_SPI_ITE_IT51XXX_FIFO_MODE */
+
+	pm_policy_state_lock_put(PM_STATE_STANDBY, PM_ALL_SUBSTATES);
+
+	return ret;
+}
+
+static void spi_it51xxx_complete(const struct device *dev, int status)
+{
+	struct spi_it51xxx_data *data = dev->data;
+	int cleanup_ret;
+
+	if (!data->active) {
+		return;
+	}
+
+	cleanup_ret = spi_it51xxx_cleanup(dev);
+
+	if (status == 0) {
+		status = cleanup_ret;
+	}
+
+	spi_context_complete(&data->ctx, dev, status);
+}
+
 static void spi_it51xxx_next_xfer(const struct device *dev)
 {
 	const struct spi_it51xxx_config *cfg = dev->config;
@@ -467,7 +518,7 @@ static void spi_it51xxx_next_xfer(const struct device *dev)
 	if (spi_it51xxx_xfer_done(ctx)) {
 #ifdef CONFIG_SPI_ITE_IT51XXX_FIFO_MODE
 		sys_write8(FIFO_TX_RX_TERMINATE, cfg->base + SPI0B_FIFO_CTRL);
-		spi_context_complete(ctx, dev, 0);
+		spi_it51xxx_complete(dev, 0);
 #else
 		sys_write8(SPI_TRANSMISSION_END, cfg->base + SPI03_STATUS);
 #endif /* CONFIG_SPI_ITE_IT51XXX_FIFO_MODE */
@@ -504,6 +555,7 @@ static int transceive(const struct device *dev, const struct spi_config *config,
 	const struct spi_it51xxx_config *cfg = dev->config;
 	struct spi_it51xxx_data *data = dev->data;
 	struct spi_context *ctx = &data->ctx;
+	unsigned int key;
 	int ret;
 
 	spi_context_lock(ctx, asynchronous, cb, userdata, config);
@@ -519,6 +571,11 @@ static int transceive(const struct device *dev, const struct spi_config *config,
 		LOG_ERR("failed to turn on spi clock %d", ret);
 		goto out;
 	}
+
+	key = irq_lock();
+
+	/* clear the stale completion */
+	spi_context_clear_completion(ctx);
 
 	spi_context_buffers_setup(ctx, tx_bufs, rx_bufs, 1);
 
@@ -539,19 +596,19 @@ static int transceive(const struct device *dev, const struct spi_config *config,
 
 	LOG_DBG("tx/rx: %d/%d", spi_context_total_tx_len(ctx), spi_context_total_rx_len(ctx));
 
+	data->active = true;
 	spi_it51xxx_next_xfer(dev);
+	irq_unlock(key);
+
 	ret = spi_context_wait_for_completion(ctx);
 
-#ifdef CONFIG_SPI_ITE_IT51XXX_FIFO_MODE
-	chip_permit_idle();
-
-	data->direction_turnaround = false;
-#endif /* CONFIG_SPI_ITE_IT51XXX_FIFO_MODE */
-	pm_policy_state_lock_put(PM_STATE_STANDBY, PM_ALL_SUBSTATES);
-
-	ret = clock_control_off(cfg->clk_dev, (clock_control_subsys_t *)&cfg->clk_cfg);
-	if (ret) {
-		LOG_ERR("failed to turn off spi clock %d", ret);
+	if (ret == -ETIMEDOUT) {
+		key = irq_lock();
+		if (data->active) {
+			spi_it51xxx_abort(dev);
+			(void)spi_it51xxx_cleanup(dev);
+		}
+		irq_unlock(key);
 	}
 out:
 	spi_context_release(ctx, ret);
@@ -659,6 +716,9 @@ static void it51xxx_spi_isr(const void *arg)
 {
 	const struct device *dev = arg;
 	const struct spi_it51xxx_config *cfg = dev->config;
+#ifdef CONFIG_SPI_ITE_IT51XXX_FIFO_MODE
+	struct spi_it51xxx_data *data = dev->data;
+#endif /* CONFIG_SPI_ITE_IT51XXX_FIFO_MODE */
 	uint8_t int_sts;
 
 	int_sts = sys_read8(cfg->base + SPI03_STATUS);
@@ -682,9 +742,8 @@ static void it51xxx_spi_isr(const void *arg)
 #ifdef CONFIG_SPI_ITE_IT51XXX_FIFO_MODE
 		return;
 #else
-		struct spi_it51xxx_data *data = dev->data;
-
-		spi_context_complete(&data->ctx, dev, 0);
+		spi_it51xxx_complete(dev, 0);
+		return;
 #endif /* CONFIG_SPI_ITE_IT51XXX_FIFO_MODE */
 	}
 
@@ -696,6 +755,9 @@ static void it51xxx_spi_isr(const void *arg)
 		LOG_DBG("isr: fifo full is asserted");
 		sys_write8(fifo_sts, cfg->base + SPI0E_CTRL_4);
 		it51xxx_spi_fifo_done_handle(dev, false);
+		if (!data->active) {
+			return;
+		}
 	}
 
 	gsclk_sts = sys_read8(cfg->base + SPI0B_FIFO_CTRL);
@@ -703,6 +765,9 @@ static void it51xxx_spi_isr(const void *arg)
 		LOG_DBG("isr: gsclk is asserted");
 		sys_write8(gsclk_sts, cfg->base + SPI0B_FIFO_CTRL);
 		it51xxx_spi_fifo_done_handle(dev, true);
+		if (!data->active) {
+			return;
+		}
 	}
 #endif /* CONFIG_SPI_ITE_IT51XXX_FIFO_MODE */
 
