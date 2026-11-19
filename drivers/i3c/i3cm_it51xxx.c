@@ -122,6 +122,7 @@ BUILD_ASSERT(ARRAY_SIZE(auto_ibi_base) >= CONFIG_IT51XXX_AUTO_IBI_MAX_TARGETS,
 
 #define I3C_IBI_HJ_ADDR 0x02
 
+#define I3C_BUS_PP_MAX_HZ       KHZ(12500) /* max. frequency in push-pull mode */
 #define I3C_BUS_TLOW_PP_MIN_NS  24  /* T_LOW period in push-pull mode */
 #define I3C_BUS_THIGH_PP_MIN_NS 24  /* T_HIGH period in push-pull mode */
 #define I3C_BUS_TLOW_OD_MIN_NS  200 /* T_LOW period in open-drain mode */
@@ -470,6 +471,11 @@ static inline int it51xxx_set_i3c_clock(const struct device *dev)
 	uint8_t tcbs = (cfg->clocks.i3c_scl_tcbs > 0xff) ? 0xff : cfg->clocks.i3c_scl_tcbs;
 	uint8_t tcasr = (cfg->clocks.i3c_scl_tcasr > 0xff) ? 0xff : cfg->clocks.i3c_scl_tcasr;
 	uint8_t tcbsr = (cfg->clocks.i3c_scl_tcbsr > 0xff) ? 0xff : cfg->clocks.i3c_scl_tcbsr;
+
+	if (config_cntlr->scl.i3c > I3C_BUS_PP_MAX_HZ) {
+		LOG_INST_WRN(cfg->log, "capped at %d Hz for push-pull mode", I3C_BUS_PP_MAX_HZ);
+		config_cntlr->scl.i3c = I3C_BUS_PP_MAX_HZ;
+	}
 
 	pp_freq = config_cntlr->scl.i3c;
 	od_freq = cfg->clocks.i3c_od_scl_hz;
