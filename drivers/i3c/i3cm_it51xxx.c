@@ -1711,7 +1711,9 @@ static void it51xxx_i3cm_isr(const struct device *dev)
 			if (data->msg_state == IT51XXX_I3CM_MSG_DAA) {
 				LOG_INST_DBG(cfg->log, "isr: no target should be assigned address");
 			} else {
-				LOG_INST_ERR(cfg->log, "isr: no target responses");
+				if (it51xxx_curr_msg_is_i3c(dev)) {
+					LOG_INST_ERR(cfg->log, "isr: no target responses");
+				}
 				data->msg_state = IT51XXX_I3CM_MSG_ERROR;
 			}
 		}
@@ -1744,7 +1746,9 @@ static void it51xxx_i3cm_isr(const struct device *dev)
 			data->ccc_msgs.target_idx = 0;
 			break;
 		case IT51XXX_I3CM_MSG_ERROR:
-			LOG_INST_ERR(cfg->log, "isr: message status error");
+			if (it51xxx_curr_msg_is_i3c(dev)) {
+				LOG_INST_ERR(cfg->log, "isr: message status error");
+			}
 			data->error_is_detected = true;
 			break;
 		case IT51XXX_I3CM_MSG_DAA:
