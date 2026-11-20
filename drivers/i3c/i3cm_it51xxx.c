@@ -599,21 +599,32 @@ static int it51xxx_prepare_priv_xfer(const struct device *dev)
 	struct i3c_msg *i3c_msgs = data->curr_msg.i3c_msgs;
 	struct i2c_msg *i2c_msgs = data->curr_msg.i2c_msgs;
 	bool more_transfer = false, send_broadcast = false, emit_stop, is_read;
+	size_t curr_idx = data->curr_msg.curr_idx;
+	size_t next_idx = curr_idx + 1;
+	bool is_last = next_idx == data->curr_msg.num_msgs;
 	int ret = 0;
 	uint8_t cycle_type;
 
+	if (curr_idx >= data->curr_msg.num_msgs) {
+		LOG_INST_ERR(cfg->log, "invalid current message index");
+		return -EINVAL;
+	}
+
 	if (it51xxx_curr_msg_is_i3c(dev)) {
-		emit_stop = i3c_msgs[data->curr_msg.curr_idx].flags & I3C_MSG_STOP;
-		is_read =
-			(i3c_msgs[data->curr_msg.curr_idx].flags & I3C_MSG_RW_MASK) == I3C_MSG_READ;
+		emit_stop = i3c_msgs[curr_idx].flags & I3C_MSG_STOP;
+		is_read = (i3c_msgs[curr_idx].flags & I3C_MSG_RW_MASK) == I3C_MSG_READ;
 	} else {
-		emit_stop = i2c_msgs[data->curr_msg.curr_idx].flags & I2C_MSG_STOP;
-		is_read =
-			(i2c_msgs[data->curr_msg.curr_idx].flags & I2C_MSG_RW_MASK) == I2C_MSG_READ;
+		emit_stop = i2c_msgs[curr_idx].flags & I2C_MSG_STOP;
+		is_read = (i2c_msgs[curr_idx].flags & I2C_MSG_RW_MASK) == I2C_MSG_READ;
+	}
+
+	if (!emit_stop && is_last) {
+		LOG_INST_WRN(cfg->log, "missing stop flag in the last message");
+		emit_stop = true;
 	}
 
 	if (emit_stop) {
-		if ((data->curr_msg.curr_idx + 1) != data->curr_msg.num_msgs) {
+		if (!is_last) {
 			LOG_INST_ERR(cfg->log, "invalid message: too much messages");
 			return -EINVAL;
 		}
@@ -626,11 +637,6 @@ static int it51xxx_prepare_priv_xfer(const struct device *dev)
 		bool next_is_read;
 		bool next_is_restart;
 
-		if ((data->curr_msg.curr_idx + 1) > data->curr_msg.num_msgs) {
-			LOG_INST_ERR(cfg->log, "invalid message: too few messages");
-			return -EINVAL;
-		}
-
 		if (is_read) {
 			LOG_INST_ERR(cfg->log,
 				     "invalid message: multiple msgs initiated from the read flag");
@@ -638,15 +644,13 @@ static int it51xxx_prepare_priv_xfer(const struct device *dev)
 		}
 
 		if (it51xxx_curr_msg_is_i3c(dev)) {
-			next_is_read = (i3c_msgs[data->curr_msg.curr_idx + 1].flags &
-					I3C_MSG_RW_MASK) == I3C_MSG_READ;
-			next_is_restart = ((i3c_msgs[data->curr_msg.curr_idx + 1].flags &
-					    I3C_MSG_RESTART) == I3C_MSG_RESTART);
+			next_is_read = (i3c_msgs[next_idx].flags & I3C_MSG_RW_MASK) == I3C_MSG_READ;
+			next_is_restart =
+				((i3c_msgs[next_idx].flags & I3C_MSG_RESTART) == I3C_MSG_RESTART);
 		} else {
-			next_is_read = (i2c_msgs[data->curr_msg.curr_idx + 1].flags &
-					I2C_MSG_RW_MASK) == I2C_MSG_READ;
-			next_is_restart = ((i2c_msgs[data->curr_msg.curr_idx + 1].flags &
-					    I2C_MSG_RESTART) == I2C_MSG_RESTART);
+			next_is_read = (i2c_msgs[next_idx].flags & I2C_MSG_RW_MASK) == I2C_MSG_READ;
+			next_is_restart =
+				((i2c_msgs[next_idx].flags & I2C_MSG_RESTART) == I2C_MSG_RESTART);
 		}
 
 		if (!next_is_read && !next_is_restart) {
@@ -667,8 +671,8 @@ static int it51xxx_prepare_priv_xfer(const struct device *dev)
 		}
 	}
 
-	if (it51xxx_curr_msg_is_i3c(dev) && data->curr_msg.curr_idx == 0 &&
-	    !(i3c_msgs[data->curr_msg.curr_idx].flags & I3C_MSG_NBCH)) {
+	if (it51xxx_curr_msg_is_i3c(dev) && curr_idx == 0 &&
+	    !(i3c_msgs[curr_idx].flags & I3C_MSG_NBCH)) {
 		send_broadcast = true;
 	}
 
@@ -739,6 +743,10 @@ static int it51xxx_i3cm_i2c_api_transfer(const struct device *dev, struct i2c_ms
 	const struct it51xxx_i3cm_config *cfg = dev->config;
 	struct it51xxx_i3cm_data *data = dev->data;
 	int ret;
+
+	if (num_msgs == 0) {
+		return 0;
+	}
 
 	if (!msgs) {
 		return -EINVAL;
@@ -1036,6 +1044,10 @@ static int it51xxx_i3cm_transfer(const struct device *dev, struct i3c_device_des
 
 	if (!msgs || target->dynamic_addr == 0U) {
 		return -EINVAL;
+	}
+
+	if (num_msgs == 0) {
+		return 0;
 	}
 
 	for (uint8_t i = 0; i < num_msgs; i++) {
