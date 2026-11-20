@@ -6,9 +6,6 @@
 
 #include <stdio.h>
 
-#include "libi3c_controller.h"
-#include "libi3c_target.h"
-
 #include <zephyr/drivers/i3c.h>
 #include <zephyr/drivers/i3c/target_device.h>
 #include <zephyr/kernel.h>

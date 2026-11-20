@@ -165,7 +165,7 @@ static int i3c_ctrl_dummy_init(const struct device *dev)
 	k_work_init(&data->read_work, i3c_ctrl_read_work);
 
 	k_work_init_delayable(&data->status_check_work, i3c_status_check_work);
-	k_work_reschedule(&data->status_check_work, K_MSEC(5));
+	// k_work_reschedule(&data->status_check_work, K_MSEC(5));
 	return 0;
 }
 

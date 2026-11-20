@@ -68,6 +68,11 @@ static int cmd_i2c_scan(const struct shell *sh, size_t argc, char **argv)
 				continue;
 			}
 
+			// if ((i + j) == 8 || (i + j) == 9) {
+			// 	shell_fprintf_normal(sh, "%02x ", i + j);
+			// 	continue;
+			// }
+
 			struct i2c_msg msgs[1];
 			uint8_t dst;
 
