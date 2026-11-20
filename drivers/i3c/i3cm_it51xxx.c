@@ -409,34 +409,56 @@ static int it51xxx_start_i3c_i2c_private_xfer(const struct device *dev, const ui
 	return 0;
 }
 
+static bool it51xxx_any_i2c_fm_mode(const struct i3c_dev_list *dev_list)
+{
+	for (uint8_t i = 0; i < dev_list->num_i2c; i++) {
+		if (I3C_LVR_I2C_MODE(dev_list->i2c[i].lvr) == I3C_LVR_I2C_FM_MODE) {
+			return true;
+		}
+	}
+	return false;
+}
+
 static inline int it51xxx_set_i2c_clock(const struct device *dev)
 {
 	const struct it51xxx_i3cm_config *cfg = dev->config;
 	struct it51xxx_i3cm_data *data = dev->data;
 	struct i3c_config_controller *config_cntlr = &data->common.ctrl_config;
-	uint32_t t_high_period_ns, t_low_period_ns;
+	uint32_t i2c_scl_hz, t_high_period_ns, t_low_period_ns;
 	uint32_t t_high, t_low;
 	uint16_t t_hddat =
 		(cfg->clocks.i2c_scl_hddat > 0xFFFF) ? 0xFFFF : cfg->clocks.i2c_scl_hddat;
 
-	/* high_period_ns = ns_per_sec / config_cntlr->scl.i2c / 2;
-	 * high_period_ns = (t_high + 1) * 20.8
-	 * t_high = ((ns_per_sec / config_cntlr->scl.i2c / 2) / 20.8) - 1
+	i2c_scl_hz = config_cntlr->scl.i2c;
+
+	/* derive from the legacy-virtual-register (lvr) of the
+	 * attached i2c devices if `i2c-scl-hz` is not set in dts
 	 */
-	t_high_period_ns = NSEC_PER_SEC / config_cntlr->scl.i2c / 2;
+	if (i2c_scl_hz == 0) {
+		i2c_scl_hz = it51xxx_any_i2c_fm_mode(&cfg->common.dev_list) ? KHZ(400) : MHZ(1);
+	}
+
+	/* high_period_ns = ns_per_sec / i2c_scl_hz / 2;
+	 * high_period_ns = (t_high + 1) * 20.8
+	 * t_high = ((ns_per_sec / i2c_scl_hz / 2) / 20.8) - 1
+	 */
+	t_high_period_ns = NSEC_PER_SEC / i2c_scl_hz / 2;
 	t_high = DIV_ROUND_UP(t_high_period_ns * 10, 208) - 1;
 
-	/* t_low_period_ns = (ns_per_sec / config_cntlr->scl.i2c) - high_period_ns
+	/* t_low_period_ns = (ns_per_sec / i2c_scl_hz) - high_period_ns
 	 * t_low_period_ns = (t_low + 1 + t_hddat + 1) * 20.8
 	 * t_low = (t_low_period_ns / 20.8) - t_hddat - 2
 	 */
-	t_low_period_ns = (NSEC_PER_SEC / config_cntlr->scl.i2c) - t_high_period_ns;
+	t_low_period_ns = (NSEC_PER_SEC / i2c_scl_hz) - t_high_period_ns;
 	t_low = DIV_ROUND_UP(t_low_period_ns * 10, 208) - t_hddat - 2;
 
 	if (t_high > 0xFFFF || t_low > 0xFFFF) {
 		LOG_INST_ERR(cfg->log, "invalid t_high(0x%x) or t_low(0x%x) setting", t_high,
 			     t_low);
+		return -EINVAL;
 	}
+
+	config_cntlr->scl.i2c = i2c_scl_hz;
 
 	sys_write8(BYTE_0(t_high), cfg->base + I3CM30_I2C_THDSTA_SUSTO_LB);
 	sys_write8(BYTE_1(t_high), cfg->base + I3CM31_I2C_THDSTA_SUSTO_HB);
@@ -1230,6 +1252,22 @@ static int it51xxx_i3cm_ibi_disable(const struct device *dev, struct i3c_device_
 }
 #endif /* CONFIG_I3C_USE_IBI */
 
+static const char *i3c_bus_mode_to_str(enum i3c_bus_mode mode)
+{
+	switch (mode) {
+	case I3C_BUS_MODE_PURE:
+		return "pure";
+	case I3C_BUS_MODE_MIXED_FAST:
+		return "mixed fast";
+	case I3C_BUS_MODE_MIXED_LIMITED:
+		return "mixed limited";
+	case I3C_BUS_MODE_MIXED_SLOW:
+		return "mixed slow";
+	default:
+		return "invalid";
+	}
+}
+
 static int it51xxx_i3cm_init(const struct device *dev)
 {
 	const struct it51xxx_i3cm_config *cfg = dev->config;
@@ -1250,9 +1288,11 @@ static int it51xxx_i3cm_init(const struct device *dev)
 	k_sem_init(&data->msg_sem, 0, 1);
 	k_mutex_init(&data->lock);
 
-	if (i3c_bus_mode(&cfg->common.dev_list) != I3C_BUS_MODE_PURE) {
-		LOG_INST_ERR(cfg->log, "only support pure mode currently");
-		return -ENOTSUP;
+	LOG_INST_INF(cfg->log, "i3c bus mode: %s",
+		     i3c_bus_mode_to_str(i3c_bus_mode(&cfg->common.dev_list)));
+
+	if (i3c_bus_mode(&cfg->common.dev_list) == I3C_BUS_MODE_INVALID) {
+		return -EINVAL;
 	}
 
 	ret = i3c_addr_slots_init(dev);
