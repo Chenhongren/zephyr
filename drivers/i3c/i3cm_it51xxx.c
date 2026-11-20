@@ -941,6 +941,7 @@ static int it51xxx_start_direct_ccc_xfer(const struct device *dev, struct i3c_cc
 		cycle_type = DIRECT_CCC_WRITE_TRANSFER;
 	}
 
+	data->ccc_msgs.target_idx = 0;
 	data->ccc_msgs.payload = payload;
 	data->msg_state = IT51XXX_I3CM_MSG_DIRECT_CCC;
 	more_transfer = (payload->targets.num_targets > 1) ? true : false;
@@ -1783,7 +1784,6 @@ static void it51xxx_i3cm_isr(const struct device *dev)
 		case IT51XXX_I3CM_MSG_DIRECT_CCC:
 			data->ccc_msgs.payload->ccc.num_xfer = data->ccc_msgs.payload->ccc.data_len;
 			it51xxx_direct_ccc_xfer_end(dev);
-			data->ccc_msgs.target_idx = 0;
 			break;
 		case IT51XXX_I3CM_MSG_ERROR:
 			if (it51xxx_curr_msg_is_i3c(dev)) {
