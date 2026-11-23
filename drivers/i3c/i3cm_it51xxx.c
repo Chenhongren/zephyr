@@ -1527,6 +1527,10 @@ static int it51xxx_private_next_xfer(const struct device *dev)
 	}
 
 	if (is_write && next_is_write && !next_is_restart) {
+		if (it51xxx_curr_msg_is_i3c(dev)) {
+			i3c_msgs[data->curr_msg.curr_idx].num_xfer =
+				i3c_msgs[data->curr_msg.curr_idx].len;
+		}
 		data->curr_msg.curr_idx++;
 	} else {
 		LOG_INST_ERR(cfg->log, "unknown next private xfer message");
