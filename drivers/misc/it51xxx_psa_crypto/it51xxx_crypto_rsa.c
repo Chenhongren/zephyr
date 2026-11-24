@@ -135,6 +135,343 @@ static void it51xxx_rsa_zeroize(void *buffer, size_t size)
 	}
 }
 
+/* (RFC 8017, appendix B.2.1)
+ * XOR the MGF1 stream directly into the destination
+ */
+static psa_status_t it51xxx_rsa_mgf1_xor(psa_algorithm_t hash_alg, size_t hash_size,
+					const uint8_t *seed, size_t seed_size,
+					uint8_t *buffer, size_t size)
+{
+	uint8_t digest[PSA_HASH_MAX_SIZE];
+	psa_status_t status = PSA_SUCCESS;
+
+	for (uint32_t block = 0; size != 0; block++) {
+		const uint8_t counter[] = {block >> 24, block >> 16, block >> 8, block};
+		psa_hash_operation_t operation = PSA_HASH_OPERATION_INIT;
+		size_t digest_size;
+		size_t chunk = MIN(size, hash_size);
+
+		status = psa_hash_setup(&operation, hash_alg);
+		if (status == PSA_SUCCESS) {
+			status = psa_hash_update(&operation, seed, seed_size);
+		}
+		if (status == PSA_SUCCESS) {
+			status = psa_hash_update(&operation, counter, sizeof(counter));
+		}
+		if (status == PSA_SUCCESS) {
+			status = psa_hash_finish(&operation, digest, sizeof(digest), &digest_size);
+		}
+		if (status != PSA_SUCCESS) {
+			(void)psa_hash_abort(&operation);
+			break;
+		}
+		if (digest_size != hash_size) {
+			status = PSA_ERROR_CORRUPTION_DETECTED;
+			break;
+		}
+
+		for (size_t i = 0; i < chunk; i++) {
+			buffer[i] ^= digest[i];
+		}
+		buffer += chunk;
+		size -= chunk;
+	}
+
+	it51xxx_rsa_zeroize(digest, sizeof(digest));
+	return status;
+}
+
+/* (RFC 8017, section 7.1.1)
+ * EM = 00 || maskedSeed || maskedDB
+ */
+static psa_status_t it51xxx_rsa_oaep_encode(psa_algorithm_t hash_alg, const uint8_t *message,
+					   size_t message_size, const uint8_t *label,
+					   size_t label_size, uint8_t *encoded,
+					   size_t encoded_size)
+{
+	size_t hash_size = PSA_HASH_LENGTH(hash_alg);
+	size_t digest_size;
+	size_t db_size;
+	uint8_t *seed;
+	uint8_t *db;
+	psa_status_t status;
+
+	if (hash_size == 0) {
+		return PSA_ERROR_NOT_SUPPORTED;
+	}
+	if (encoded_size < 2 * hash_size + 2 || message_size > encoded_size - 2 * hash_size - 2) {
+		return PSA_ERROR_INVALID_ARGUMENT;
+	}
+
+	seed = encoded + 1;
+	db = seed + hash_size;
+	db_size = encoded_size - 1 - hash_size;
+	encoded[0] = 0;
+
+	status = psa_hash_compute(hash_alg, label_size == 0 ? (const uint8_t *)"" : label,
+				  label_size, db, hash_size, &digest_size);
+	if (status != PSA_SUCCESS) {
+		return status;
+	}
+	if (digest_size != hash_size) {
+		return PSA_ERROR_CORRUPTION_DETECTED;
+	}
+
+	memset(db + hash_size, 0, db_size - hash_size - message_size - 1);
+	db[db_size - message_size - 1] = 1;
+	if (message_size != 0) {
+		memcpy(db + db_size - message_size, message, message_size);
+	}
+
+	status = psa_generate_random(seed, hash_size);
+	if (status != PSA_SUCCESS) {
+		return status;
+	}
+
+	status = it51xxx_rsa_mgf1_xor(hash_alg, hash_size, seed, hash_size, db, db_size);
+	if (status != PSA_SUCCESS) {
+		return status;
+	}
+
+	return it51xxx_rsa_mgf1_xor(hash_alg, hash_size, db, db_size, seed, hash_size);
+}
+
+/* (RFC 8017, section 7.1.2)
+ * Unmask EM in place
+ */
+static psa_status_t it51xxx_rsa_oaep_decode(psa_algorithm_t hash_alg, const uint8_t *label,
+					   size_t label_size, uint8_t *encoded,
+					   size_t encoded_size, uint8_t *output,
+					   size_t output_size, size_t *output_length)
+{
+	uint8_t label_hash[PSA_HASH_MAX_SIZE];
+	size_t hash_size = PSA_HASH_LENGTH(hash_alg);
+	size_t digest_size;
+	size_t db_size;
+	size_t delimiter = 0;
+	size_t message_size;
+	uint32_t error;
+	uint32_t found = 0;
+	uint8_t *seed;
+	uint8_t *db;
+	psa_status_t status;
+
+	if (hash_size == 0) {
+		return PSA_ERROR_NOT_SUPPORTED;
+	}
+	if (encoded_size < 2 * hash_size + 2) {
+		return PSA_ERROR_INVALID_PADDING;
+	}
+
+	seed = encoded + 1;
+	db = seed + hash_size;
+	db_size = encoded_size - 1 - hash_size;
+
+	status = it51xxx_rsa_mgf1_xor(hash_alg, hash_size, db, db_size, seed, hash_size);
+	if (status != PSA_SUCCESS) {
+		return status;
+	}
+
+	status = it51xxx_rsa_mgf1_xor(hash_alg, hash_size, seed, hash_size, db, db_size);
+	if (status != PSA_SUCCESS) {
+		return status;
+	}
+
+	status = psa_hash_compute(hash_alg, label_size == 0 ? (const uint8_t *)"" : label,
+				  label_size, label_hash, sizeof(label_hash), &digest_size);
+	if (status != PSA_SUCCESS) {
+		goto cleanup;
+	}
+
+	if (digest_size != hash_size) {
+		status = PSA_ERROR_CORRUPTION_DETECTED;
+		goto cleanup;
+	}
+
+	/* scan the entire db before disclosing whether the padding is valid */
+	error = encoded[0];
+	for (size_t i = 0; i < hash_size; i++) {
+		error |= db[i] ^ label_hash[i];
+	}
+	for (size_t i = hash_size; i < db_size; i++) {
+		uint32_t value = db[i];
+		uint32_t is_zero = (value - 1U) >> 31;
+		uint32_t is_one = ((value ^ 1U) - 1U) >> 31;
+		uint32_t before_delimiter = found ^ 1U;
+		size_t mask = (size_t)0 - (size_t)(is_one & before_delimiter);
+
+		error |= before_delimiter & (1U ^ (is_zero | is_one));
+		delimiter = (delimiter & ~mask) | (i & mask);
+		found |= is_one;
+	}
+	error |= found ^ 1U;
+	if (error != 0) {
+		status = PSA_ERROR_INVALID_PADDING;
+		goto cleanup;
+	}
+
+	message_size = db_size - delimiter - 1;
+	if (output_size < message_size) {
+		status = PSA_ERROR_BUFFER_TOO_SMALL;
+		goto cleanup;
+	}
+	if (message_size != 0) {
+		memcpy(output, db + delimiter + 1, message_size);
+	}
+
+	*output_length = message_size;
+
+cleanup:
+	it51xxx_rsa_zeroize(label_hash, sizeof(label_hash));
+
+	return status;
+}
+
+static psa_status_t it51xxx_rsa_pss_digest(psa_algorithm_t hash_alg, const uint8_t *hash,
+					  size_t hash_size, const uint8_t *salt, size_t salt_size,
+					  uint8_t *digest)
+{
+	static const uint8_t zeros[8];
+	psa_hash_operation_t operation = PSA_HASH_OPERATION_INIT;
+	psa_status_t status;
+	size_t digest_size;
+
+	status = psa_hash_setup(&operation, hash_alg);
+	if (status == PSA_SUCCESS) {
+		status = psa_hash_update(&operation, zeros, sizeof(zeros));
+	}
+	if (status == PSA_SUCCESS) {
+		status = psa_hash_update(&operation, hash, hash_size);
+	}
+	if (status == PSA_SUCCESS && salt_size != 0) {
+		status = psa_hash_update(&operation, salt, salt_size);
+	}
+	if (status == PSA_SUCCESS) {
+		status = psa_hash_finish(&operation, digest, hash_size, &digest_size);
+	}
+	if (status != PSA_SUCCESS) {
+		(void)psa_hash_abort(&operation);
+		return status;
+	}
+
+	return digest_size == hash_size ? PSA_SUCCESS : PSA_ERROR_CORRUPTION_DETECTED;
+}
+
+/* (RFC 8017, section 9.1.1)
+ * it51xxx accepts modulus sizes in multiples of 32 bits,
+ * so emLen is the modulus byte length and emBits leaves one unused high bit
+ */
+static psa_status_t it51xxx_rsa_pss_encode(psa_algorithm_t alg, const uint8_t *hash,
+					  size_t hash_length, uint8_t *encoded, size_t encoded_size)
+{
+	psa_algorithm_t hash_alg = PSA_ALG_SIGN_GET_HASH(alg);
+	size_t hash_size = PSA_HASH_LENGTH(hash_alg);
+	size_t salt_size;
+	size_t db_size;
+	size_t padding_size;
+	uint8_t *salt;
+	uint8_t *digest;
+	psa_status_t status;
+
+	if (hash_size == 0) {
+		return PSA_ERROR_NOT_SUPPORTED;
+	}
+	if (hash_length != hash_size || encoded_size < hash_size + 2) {
+		return PSA_ERROR_INVALID_ARGUMENT;
+	}
+
+	db_size = encoded_size - hash_size - 1;
+	salt_size = MIN(hash_size, db_size - 1);
+	padding_size = db_size - salt_size - 1;
+	salt = encoded + padding_size + 1;
+	digest = encoded + db_size;
+
+	memset(encoded, 0, padding_size);
+	encoded[padding_size] = 1;
+	if (salt_size != 0) {
+		status = psa_generate_random(salt, salt_size);
+		if (status != PSA_SUCCESS) {
+			return status;
+		}
+	}
+	status = it51xxx_rsa_pss_digest(hash_alg, hash, hash_size, salt, salt_size, digest);
+	if (status != PSA_SUCCESS) {
+		return status;
+	}
+	status = it51xxx_rsa_mgf1_xor(hash_alg, hash_size, digest, hash_size, encoded, db_size);
+	if (status != PSA_SUCCESS) {
+		return status;
+	}
+
+	encoded[0] &= 0x7f;
+	encoded[encoded_size - 1] = 0xbc;
+
+	return PSA_SUCCESS;
+}
+
+/* (RFC 8017, section 9.1.2)
+ * The recovered signature block is public
+ */
+static psa_status_t it51xxx_rsa_pss_verify(psa_algorithm_t alg, const uint8_t *hash,
+					  size_t hash_length, uint8_t *encoded, size_t encoded_size)
+{
+	uint8_t expected[PSA_HASH_MAX_SIZE];
+	psa_algorithm_t hash_alg = PSA_ALG_SIGN_GET_HASH(alg);
+	size_t hash_size = PSA_HASH_LENGTH(hash_alg);
+	size_t db_size;
+	size_t delimiter = 0;
+	size_t salt_size;
+	const uint8_t *digest;
+	uint8_t difference = 0;
+	psa_status_t status;
+
+	if (hash_size == 0) {
+		return PSA_ERROR_NOT_SUPPORTED;
+	}
+	if (hash_length != hash_size) {
+		return PSA_ERROR_INVALID_ARGUMENT;
+	}
+	if (encoded_size < hash_size + 2 || (encoded[0] & 0x80) != 0 ||
+	    encoded[encoded_size - 1] != 0xbc) {
+		return PSA_ERROR_INVALID_SIGNATURE;
+	}
+
+	db_size = encoded_size - hash_size - 1;
+	digest = encoded + db_size;
+
+	status = it51xxx_rsa_mgf1_xor(hash_alg, hash_size, digest, hash_size, encoded, db_size);
+	if (status != PSA_SUCCESS) {
+		return status;
+	}
+
+	encoded[0] &= 0x7f;
+
+	while (delimiter < db_size && encoded[delimiter] == 0) {
+		delimiter++;
+	}
+	if (delimiter == db_size || encoded[delimiter] != 1) {
+		return PSA_ERROR_INVALID_SIGNATURE;
+	}
+
+	salt_size = db_size - delimiter - 1;
+	if (!PSA_ALG_IS_RSA_PSS_ANY_SALT(alg) && salt_size != MIN(hash_size, db_size - 1)) {
+		return PSA_ERROR_INVALID_SIGNATURE;
+	}
+
+	status = it51xxx_rsa_pss_digest(hash_alg, hash, hash_size, encoded + delimiter + 1,
+				       salt_size, expected);
+	if (status == PSA_SUCCESS) {
+		for (size_t i = 0; i < hash_size; i++) {
+			difference |= expected[i] ^ digest[i];
+		}
+		status = difference == 0 ? PSA_SUCCESS : PSA_ERROR_INVALID_SIGNATURE;
+	}
+
+	it51xxx_rsa_zeroize(expected, sizeof(expected));
+
+	return status;
+}
+
 /* (RFC 8017, section 9.2, steps 2 through 5)
  * Encode the hash using EMSA-PKCS1-v1_5.
  *
@@ -659,20 +996,20 @@ psa_status_t ite_it51xxx_sign_hash(const psa_key_attributes_t *attributes,
 	}
 
 	if (PSA_ALG_IS_RSA_PSS(alg)) {
-		/* unsupported hash signing using pss padding currently */
-		return PSA_ERROR_NOT_SUPPORTED;
-	}
-
-	status = it51xxx_rsa_add_pkcs1_v15_padding(alg, hash, hash_length, encoded, key.n.size);
-	if (status != PSA_SUCCESS) {
-		return status;
-	}
-
-	/* (RFC 8017, section 5.2.1) RSASP1: require 0 <= m < n */
-	if (memcmp(encoded, key.n.data, key.n.size) >= 0) {
-		status = PSA_ERROR_INVALID_ARGUMENT;
+		status = it51xxx_rsa_pss_encode(alg, hash, hash_length, encoded, key.n.size);
 	} else {
-		status = it51xxx_crypto_rsa_calculate(&key, encoded, KEY_PRIVATE, signature, NULL);
+		status = it51xxx_rsa_add_pkcs1_v15_padding(alg, hash, hash_length, encoded,
+							 key.n.size);
+	}
+
+	if (status == PSA_SUCCESS) {
+		/* (RFC 8017, section 5.2.1) RSASP1: require 0 <= m < n */
+		if (memcmp(encoded, key.n.data, key.n.size) >= 0) {
+			status = PSA_ERROR_INVALID_ARGUMENT;
+		} else {
+			status = it51xxx_crypto_rsa_calculate(&key, encoded, KEY_PRIVATE, signature,
+							     NULL);
+		}
 	}
 
 	it51xxx_rsa_zeroize(encoded, sizeof(encoded));
@@ -718,16 +1055,18 @@ psa_status_t ite_it51xxx_verify_hash(const psa_key_attributes_t *attributes,
 	}
 
 	if (PSA_ALG_IS_RSA_PSS(alg)) {
-		/* unsupported signature verification using pss padding currently */
-		return PSA_ERROR_NOT_SUPPORTED;
+		status = it51xxx_crypto_rsa_calculate(&key, signature, key.exp_select, expected, NULL);
+		if (status == PSA_SUCCESS) {
+			status = it51xxx_rsa_pss_verify(alg, hash, hash_length, expected, key.n.size);
+		}
+	} else {
+		status = it51xxx_rsa_add_pkcs1_v15_padding(alg, hash, hash_length, expected,
+							 key.n.size);
+		if (status == PSA_SUCCESS) {
+			status = it51xxx_crypto_rsa_calculate(&key, signature, key.exp_select, NULL,
+							     expected);
+		}
 	}
-
-	status = it51xxx_rsa_add_pkcs1_v15_padding(alg, hash, hash_length, expected, key.n.size);
-	if (status != PSA_SUCCESS) {
-		return status;
-	}
-
-	status = it51xxx_crypto_rsa_calculate(&key, signature, key.exp_select, NULL, expected);
 
 	it51xxx_rsa_zeroize(expected, sizeof(expected));
 
@@ -774,11 +1113,13 @@ psa_status_t ite_it51xxx_asymmetric_encrypt(const psa_key_attributes_t *attribut
 	}
 
 	if (PSA_ALG_IS_RSA_OAEP(alg)) {
-		/* unsupported rsa encrypt using oaep padding currently */
-		return PSA_ERROR_NOT_SUPPORTED;
+		status = it51xxx_rsa_oaep_encode(PSA_ALG_RSA_OAEP_GET_HASH(alg), input, input_length,
+						 salt, salt_length, encoded, key.n.size);
+	} else {
+		status = it51xxx_rsa_add_encryption_padding(input, input_length, encoded,
+							    key.n.size);
 	}
 
-	status = it51xxx_rsa_add_encryption_padding(input, input_length, encoded, key.n.size);
 	if (status == PSA_SUCCESS) {
 		/* (RFC 8017, section 5.1.1) RSAEP: requires 0 <= m < n */
 		if (memcmp(encoded, key.n.data, key.n.size) >= 0) {
@@ -839,11 +1180,6 @@ psa_status_t ite_it51xxx_asymmetric_decrypt(const psa_key_attributes_t *attribut
 		return PSA_ERROR_INVALID_ARGUMENT;
 	}
 
-	if (PSA_ALG_IS_RSA_OAEP(alg)) {
-		/* unsupported rsa decrypt using oaep padding currently */
-		return PSA_ERROR_NOT_SUPPORTED;
-	}
-
 	/* (RFC 8017, section 5.1.2) RSADP: require 0 <= c < n */
 	if (memcmp(input, key.n.data, key.n.size) >= 0) {
 		return PSA_ERROR_INVALID_PADDING;
@@ -851,8 +1187,14 @@ psa_status_t ite_it51xxx_asymmetric_decrypt(const psa_key_attributes_t *attribut
 
 	status = it51xxx_crypto_rsa_calculate(&key, input, KEY_PRIVATE, encoded, NULL);
 	if (status == PSA_SUCCESS) {
-		status = it51xxx_rsa_remove_encryption_padding(encoded, key.n.size, output,
-							       output_size, output_length);
+		if (PSA_ALG_IS_RSA_OAEP(alg)) {
+			status = it51xxx_rsa_oaep_decode(PSA_ALG_RSA_OAEP_GET_HASH(alg), salt,
+							 salt_length, encoded, key.n.size, output,
+							 output_size, output_length);
+		} else {
+			status = it51xxx_rsa_remove_encryption_padding(encoded, key.n.size, output,
+								       output_size, output_length);
+		}
 	}
 
 	it51xxx_rsa_zeroize(encoded, sizeof(encoded));
