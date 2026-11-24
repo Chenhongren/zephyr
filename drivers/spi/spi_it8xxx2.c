@@ -443,6 +443,9 @@ static void spi_it8xxx2_abort(const struct device *dev)
 	/* clear interrupt status */
 	sys_write8(sys_read8(cfg->base + SPI0C_INT_STS), cfg->base + SPI0C_INT_STS);
 	ite_intc_isr_clear(cfg->spi_irq);
+
+	sys_write8(0x40, 0xf01610);
+	sys_write8(sys_read8(0xf01601) | BIT(0), 0xf01601);
 }
 
 static int transceive(const struct device *dev, const struct spi_config *config,
@@ -541,6 +544,7 @@ static void it8xxx2_spi_isr(const void *arg)
 
 	/* ignore the pending interrupt */
 	if (!data->active) {
+		LOG_ERR("isr: triggered but non active");
 		return;
 	}
 
